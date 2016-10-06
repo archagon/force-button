@@ -1,6 +1,6 @@
-![](demo.gif)
-
 Just a simple switch-like `UIControl` that detects force and only toggles past a certain threshhold (similar to the way peek/pop behaves). Rough around the edges!
+
+![](demo.gif)
 
 Demo video made using ffmpeg:
 
