@@ -267,9 +267,15 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // prevents gesture from eating up scroll view pan
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // TODO: there's gotta be some better way to do this! we want to make it so that any other gesture causes this one to fail
+        if otherGestureRecognizer.state == .recognized || otherGestureRecognizer.state == .began  {
+            gestureRecognizer.isEnabled = false
+            gestureRecognizer.isEnabled = true
+        }
+        
         return true
     }
-    
+
     // less of a gesture; more of a pressure sensor
     class DeepTouchGestureRecognizer: UIGestureRecognizer {
         

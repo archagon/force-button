@@ -20,6 +20,7 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
             super.init(frame: frame, collectionViewLayout: layout)
             
             self.delaysContentTouches = false
+            self.canCancelContentTouches = true
         }
         
         required init?(coder aDecoder: NSCoder) {
