@@ -9,7 +9,7 @@
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-class ForceButton: UIControl {
+class ForceButton: UIControl, UIGestureRecognizerDelegate {
     enum State {
         case off //no touches
         case toOn //gesturing to snap point
@@ -44,6 +44,9 @@ class ForceButton: UIControl {
     
     private var animationDisplayLink: CADisplayLink?
     private var animation: (delay: Double, start: Double, end: Double, startTime: TimeInterval, duration: TimeInterval, function: ((Double)->Double))?
+    
+    private var initialTouchPosition: CGPoint?
+    private var cancellationRadius: Double = 4
     
     private var threshhold: Double = 0.4
     private var t: Double = 0 {
@@ -124,6 +127,14 @@ class ForceButton: UIControl {
         get {
             return self.displayState.isOn
         }
+        set {
+            if !newValue {
+                self.displayState = .off
+            }
+            else {
+                self.displayState = .on
+            }
+        }
     }
     
     override init(frame: CGRect) {
@@ -136,6 +147,7 @@ class ForceButton: UIControl {
         self.isOpaque = false
         
         self.deepTouchGestureRecognizer = DeepTouchGestureRecognizer(target: self, action: #selector(action(recognizer:)), forceScaleFactor: 1.25)
+        self.deepTouchGestureRecognizer.delegate = self
         self.addGestureRecognizer(self.deepTouchGestureRecognizer)
     }
     
@@ -148,6 +160,8 @@ class ForceButton: UIControl {
             switch recognizer.state {
                 
             case .began:
+                self.initialTouchPosition = recognizer.location(in: self)
+                
                 switch self.displayState {
                 case .off:
                     self.displayState = .toOn
@@ -161,6 +175,16 @@ class ForceButton: UIControl {
                 
                 fallthrough
             case .changed:
+                // cancel recognizer if touch strays too far
+                if let p0 = self.initialTouchPosition {
+                    let p1 = recognizer.location(in: self)
+                    let distance = abs(sqrt(pow(Double(p1.x - p0.x), 2) + pow(Double(p1.y - p0.y), 2)))
+                    if distance >= self.cancellationRadius {
+                        recognizer.isEnabled = false
+                        recognizer.isEnabled = true
+                    }
+                }
+                
                 if self.displayState == .toOn {
                     self.t = recognizer.t
                 }
@@ -239,6 +263,11 @@ class ForceButton: UIControl {
         if let block = renderBlock {
             block(self.t, self.threshhold, rect, self.bounds, self.displayState)
         }
+    }
+    
+    // prevents gesture from eating up scroll view pan
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
     }
     
     // less of a gesture; more of a pressure sensor
