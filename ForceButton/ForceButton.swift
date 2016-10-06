@@ -9,6 +9,9 @@
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
+// TODO: when moving past detection radius, we should be able to un-cancel our touch, like UIButtons do
+// TODO: we should be able to cancel an off touch
+
 class ForceButton: UIControl, UIGestureRecognizerDelegate {
     enum State {
         case off //no touches
@@ -43,9 +46,6 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
     
-    // TODO: cancel on swipe away, even if in "on" state
-    // TODO: tap gesture
-    
     private var tapGestureRecognizer: UIGestureRecognizer!
     private var deepTouchGestureRecognizer: DeepTouchGestureRecognizer!
     private var ignoreGestureRecognizerActions: Bool = false //enabled when we snap into the on position
@@ -57,8 +57,6 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     private var initialTouchPosition: CGPoint?
     private var cancellationRadius: Double = 16
     
-    private var forceTouchStartingThreshhold: Double = 1.0/6.7
-    private var forceTouchMinimumDuration: Double = 0
     private var snapThreshhold: Double = 0.4
     private var t: Double = 0 {
         didSet {
