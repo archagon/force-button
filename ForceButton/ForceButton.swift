@@ -66,13 +66,34 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 block(self.t, self.snapThreshhold, self.bounds, self.displayState)
             }
             
+            // TODO: this doesn't really belong here
             if self.displayState == .toOn, self.tapticStyle != nil {
                 self.hapticGenerator.prepare()
             }
         }
     }
-    private var displayState: State = .off {
-        didSet {
+    
+    private var _displayState: State = .off
+    private var displayState: State {
+        get {
+            return self._displayState
+        }
+        set {
+            self.setDisplayState(newValue, animated: true)
+        }
+    }
+    private func setDisplayState(_ state: State, animated: Bool) {
+        let oldValue = self._displayState
+        let newValue = state
+        self._displayState = state
+        
+        cancelExistingAnimation: do {
+            self.animationDisplayLink?.invalidate()
+            self.animationDisplayLink = nil
+            self.animation = nil
+        }
+        
+        if animated {
             func dampenedSine(_ t: Double) -> Double {
                 let initialAmplitude: Double = 1
                 let decayConstant: Double = 3
@@ -86,15 +107,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 return max(min(1 - pow(1 - t, 3), 1), 0)
             }
             
-            cancelExistingAnimation: do {
-                self.animationDisplayLink?.invalidate()
-                self.animationDisplayLink = nil
-                self.animation = nil
-            }
-            
-            if oldValue.isOff && displayState.isOn {
-                // snapping to the on position
-                
+            if oldValue.isOff && newValue.isOn {
                 animateSnap: do {
                     self.animationDisplayLink?.invalidate()
                     self.animation = (
@@ -111,7 +124,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 }
             }
             
-            if displayState == .off {
+            if newValue == .off {
                 animateToZero: do {
                     self.animationDisplayLink?.invalidate()
                     self.animation = (
@@ -128,6 +141,9 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 }
             }
         }
+        else {
+            self.t = (newValue.isOn ? 1 : 0)
+        }
     }
     
     var on: Bool {
@@ -136,10 +152,10 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
         set {
             if !newValue {
-                self.displayState = .off
+                setDisplayState(.off, animated: false)
             }
             else {
-                self.displayState = .on
+                setDisplayState(.on, animated: false)
             }
         }
     }
