@@ -9,6 +9,26 @@
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
+// AB: not using .highlighted because highlights are automatic and we need manual control
+private extension UIControlState {
+    static let depressed: UIControlState = {
+        var applicationMask: UIControlState?
+        
+        var applicationBits = UIControlState.application.rawValue
+        for i: UInt in 0..<32 {
+            if (applicationBits & 0x1) > 0 {
+                applicationMask = UIControlState(rawValue: (UIControlState.application.rawValue & (0x1 << i)))
+                break
+            }
+            applicationBits >>= 1
+        }
+        
+        assert(applicationMask != nil, "could not find any free application mask bits")
+        
+        return applicationMask!
+    }()
+}
+
 class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // AB: There are two types of state to track here. First, there's the value state — on or off. This is stored
     // as a separate property and causes the button to change its display state. The second is the display
@@ -17,7 +37,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // MARK: - Properties -
     
-    // MARK: Public
+    // MARK: Public Custom Properties
     
     var tapticStyle: UIImpactFeedbackStyle? = .medium {
         didSet {
@@ -34,53 +54,98 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
     
+    // MARK: Public State Properties
+    
+    // AB: not my favorite way of doing things, but oh well
+    private var disableAutomaticAnimations: Bool = false
+    
     var on: Bool = false {
         didSet {
-            // KLUDGE: prevents isSelected from overwriting isHighlighted; also causes update to be called a few extra times
+            // KLUDGE: prevents isSelected from overwriting isDepressed; also causes update to be called a few extra times
             let oldState = self.state
-            self.isHighlighted = false
+            self.isDepressed = false
             self.isSelected = on
-            self.updateDisplayState(oldValue: oldState, animated: true)
+            self.updateDisplayState(oldValue: oldState, animated: !self.disableAutomaticAnimations)
+        }
+    }
+    func setOn(_ on: Bool, animated: Bool) {
+        self.disableAutomaticAnimations = !animated
+        self.on = on
+        self.disableAutomaticAnimations = false
+        
+    }
+    
+    var isDepressed: Bool = false {
+        didSet {
+            if oldValue != isDepressed {
+                var oldState = self.state
+                
+                if oldValue {
+                    oldState.insert(.depressed)
+                }
+                else {
+                    oldState.remove(.depressed)
+                }
+                
+                self.updateDisplayState(oldValue: oldState, animated: !self.disableAutomaticAnimations)
+            }
+        }
+    }
+    
+    override var isSelected: Bool {
+        didSet {
+            if oldValue != isSelected {
+                var oldState = self.state
+                
+                if oldValue {
+                    oldState.insert(.selected)
+                }
+                else {
+                    oldState.remove(.selected)
+                }
+                
+                self.updateDisplayState(oldValue: oldState, animated: !self.disableAutomaticAnimations)
+            }
         }
     }
     
     // MARK: Appearance Constants, Etc.
     
     // TODO: at the moment we only SORT OF support control state, but it's still good to set up the framework
-    private let statesContributingToAppearance: [UIControlState] = [.selected, .highlighted]
+    private let statesContributingToAppearance: [UIControlState] = [.selected, .depressed]
     private let stateT: [UIControlState:Double] = [
         .normal: 0,                     //off
-        .highlighted: 0.5,              //off->on highlight
+        .depressed: 0.5,              //off->on highlight
         .selected: 0.4,                 //on
-        [.selected, .highlighted]: 0.5  //on->off highlight
+        [.selected, .depressed]: 0.5  //on->off highlight
     ]
-    private static let stateTransitionQuick: TimeInterval = 2.1
+    private static let stateTransitionQuick: TimeInterval = 0.3
     private static let stateTransitionLong: TimeInterval = stateTransitionQuick
     private let stateTransitionToDuration: [UIControlState:[UIControlState:TimeInterval]] = [
         .normal: [
-            .highlighted: stateTransitionQuick,
+            .depressed: stateTransitionQuick,
             .selected: stateTransitionLong
         ],
-        .highlighted: [
+        .depressed: [
             .normal: stateTransitionQuick,
             .selected: stateTransitionQuick
         ],
         .selected: [
             .normal: stateTransitionLong,
-            [.selected, .highlighted]: stateTransitionQuick
+            [.selected, .depressed]: stateTransitionQuick
         ],
-        [.selected, .highlighted]: [
+        [.selected, .depressed]: [
             .selected: stateTransitionQuick,
             .normal: stateTransitionQuick
         ]
     ]
     private let stateTransitionToTweeningFunction: [UIControlState:[UIControlState:((Double)->Double)]] = [
         .normal: [
-//            .highlighted: dampenedSine,
-            .highlighted: easeOutCubic,
+//            .depressed: dampenedSine,
+            .depressed: easeOutCubic,
             .selected: easeOutCubic
         ],
-        .highlighted: [
+        .depressed: [
 //            .normal: dampenedSine,
             .normal: easeOutCubic,
             .selected: easeOutCubic
@@ -88,17 +153,19 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         .selected: [
 //            .normal: dampenedSine,
             .normal: easeOutCubic,
-            [.selected, .highlighted]: easeOutCubic
+            [.selected, .depressed]: easeOutCubic
         ],
-        [.selected, .highlighted]: [
+        [.selected, .depressed]: [
             .selected: easeOutCubic,
             .normal: easeOutCubic
 //            .normal: dampenedSine
         ]
     ]
     
-    private let snapThreshhold: Double = 0.4
-    private let cancellationRadius: Double = 16
+    private let snapOnT: Double = 0.4
+    private let snapOffT: Double = 0.5
+//    private let cancellationThreshhold: CGFloat = 16
+    private let cancellationThreshhold: CGFloat = 100
     
     // MARK: Display State
     
@@ -117,16 +184,19 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         let oldValue = condenseState(oldValue)
         let newValue = condenseState(self.state)
         
-        //print("going from state \(oldValue.description) to state \(newValue.description)")
-        
         if oldValue == newValue {
             return
         }
+        
+        //print("\(self.hashValue): going from state \(oldValue.description) to state \(newValue.description)")
         
         guard let targetT: Double = self.stateT[newValue] else {
             assert(false, "unable to handle state transition from \(oldValue.description) to \(newValue.description)")
             return
         }
+        
+        // cancel existing animations
+        self.animation = nil
         
         if animated {
             guard
@@ -152,46 +222,12 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
     
-    override var isHighlighted: Bool {
-        didSet {
-            if oldValue != isHighlighted {
-                var oldState = self.state
-                
-                if oldValue {
-                    oldState.insert(.highlighted)
-                }
-                else {
-                    oldState.remove(.highlighted)
-                }
-                
-                self.updateDisplayState(oldValue: oldState, animated: true)
-            }
-        }
-    }
-    
-    override var isSelected: Bool {
-        didSet {
-            if oldValue != isSelected {
-                var oldState = self.state
-                
-                if oldValue {
-                    oldState.insert(.selected)
-                }
-                else {
-                    oldState.remove(.selected)
-                }
-                
-                self.updateDisplayState(oldValue: oldState, animated: true)
-            }
-        }
-    }
-    
     private var t: Double = 0 {
         didSet {
             self.setNeedsDisplay()
             
             if let block = self.tBlock {
-                block(self.t, self.snapThreshhold, self.bounds, self.state, self.on)
+                block(self.t, self.snapOnT, self.bounds, self.state, self.on)
             }
         }
     }
@@ -217,12 +253,10 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     private var panGestureRecognizer: SimpleMovementGestureRecognizer!
     private var deepTouchGestureRecognizer: DeepTouchGestureRecognizer!
     
-    private var initialTouchPosition: CGPoint?
-    private var ignoreGestureRecognizerActions: Bool = false //enabled when we snap into the on position
-    
     // MARK: Hardware
     
     private var hapticGenerator: UIImpactFeedbackGenerator!
+    private var lightHapticGenerator: UIImpactFeedbackGenerator!
     
     // MARK: - Lifecycle -
     
@@ -231,18 +265,21 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         
         if let style = self.tapticStyle {
             self.hapticGenerator = UIImpactFeedbackGenerator(style: style)
+            self.lightHapticGenerator = UIImpactFeedbackGenerator(style: .light)
         }
         
         self.isOpaque = false
         
         self.panGestureRecognizer = SimpleMovementGestureRecognizer(target: self, action: #selector(tapEvents(recognizer:)))
+        self.panGestureRecognizer.delegate = self
         self.addGestureRecognizer(self.panGestureRecognizer)
         
-        self.deepTouchGestureRecognizer = DeepTouchGestureRecognizer(target: self, action: #selector(action(recognizer:)), forceScaleFactor: 1.25)
+        self.deepTouchGestureRecognizer = DeepTouchGestureRecognizer(target: self, action: #selector(deepTouchEvents(recognizer:)))
         self.deepTouchGestureRecognizer.delegate = self
         self.addGestureRecognizer(self.deepTouchGestureRecognizer)
         
-        self.deepTouchGestureRecognizer.nonForceDefaultValue = self.snapThreshhold
+        self.deepTouchGestureRecognizer.nonForceDefaultValue = self.snapOnT
+        self.deepTouchGestureRecognizer.forceScaleFactor = 1.25
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -261,19 +298,24 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // MARK: - Actions -
     
-    var tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
-    let tapMaxDistancePastBounds = CGFloat(10)
-    @objc func tapEvents(recognizer: UIPanGestureRecognizer) {
-        func pointInsideTapBounds(_ p: CGPoint) -> Bool {
-            return !(p.x >= self.bounds.size.width + tapMaxDistancePastBounds ||
-                p.x <= -tapMaxDistancePastBounds ||
-                p.y >= self.bounds.size.height + tapMaxDistancePastBounds ||
-                p.y <= -tapMaxDistancePastBounds)
-        }
-        
+    // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
+    private var tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    private var deepTouchStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    
+    private func pointInsideTapBounds(_ p: CGPoint) -> Bool {
+        return !(p.x >= self.bounds.size.width + cancellationThreshhold ||
+            p.x <= -cancellationThreshhold ||
+            p.y >= self.bounds.size.height + cancellationThreshhold ||
+            p.y <= -cancellationThreshhold)
+    }
+    
+    @objc private func tapEvents(recognizer: UIPanGestureRecognizer) {
         switch recognizer.state {
             
         case .began:
+            print("tap gesture recognizer began")
+            self.animation = nil
+            
             fallthrough
         case .changed:
             if self.tapStartingConditions == nil {
@@ -284,7 +326,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 let p1 = recognizer.location(in: nil)
                 let localPoint = self.convert(p1, from: nil)
                 
-                self.isHighlighted = pointInsideTapBounds(localPoint)
+                self.isDepressed = pointInsideTapBounds(localPoint)
             }
             
             break
@@ -307,6 +349,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             break
             
         case .cancelled:
+            print("tap gesture recognizer cancelled")
             fallthrough
         default:
             if let startingConditions = self.tapStartingConditions {
@@ -319,113 +362,98 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             break
         }
     }
-    
-    // TODO: QQQ: this doesn't really belong here
-    //            if self.displayState == .toOn, self.tapticStyle != nil {
-    //                self.hapticGenerator.prepare()
-    //            }
-    @objc func action(recognizer: DeepTouchGestureRecognizer) {
-//        // ensures sendActions is called when needed; can't do it in displayState didSet b/c on property can also be changed
-//        // manually, i.e. we only want it called on user input, which is all handled here
-//        func setDisplayState(_ new: State) {
-//            let old = self.displayState
-//            
-//            self.displayState = new
-//            
-//            if old.isOn != new.isOn {
-//                self.sendActions(for: .valueChanged)
-//            }
-//            
-//            if !old.isOn && new.isOn, self.tapticStyle != nil {
-//                self.hapticGenerator.impactOccurred()
-//            }
-//        }
-//        
-//        if !self.ignoreGestureRecognizerActions {
-//            switch recognizer.state {
-//                
-//            case .began:
-//                self.initialTouchPosition = recognizer.location(in: self)
-//                
-//                switch self.displayState {
-//                case .off:
-//                    setDisplayState(.toOn)
-//                    break
-//                case .on:
-//                    setDisplayState(.toOff)
-//                    break
-//                default:
-//                    break
-//                }
-//                
-//                fallthrough
-//            case .changed:
-//                // cancel recognizer if touch strays too far
-//                if let p0 = self.initialTouchPosition {
-//                    let p1 = recognizer.location(in: self)
-//                    let distance = abs(sqrt(pow(Double(p1.x - p0.x), 2) + pow(Double(p1.y - p0.y), 2)))
-//                    if distance >= self.cancellationRadius {
-//                        recognizer.isEnabled = false
-//                        recognizer.isEnabled = true
-//                    }
-//                }
-//                
-//                if self.displayState == .toOn {
-//                    self.t = recognizer.t
-//                }
-//                else if self.displayState == .toOff {
-//                    self.t = self.snapThreshhold + log10(1 + recognizer.t)
-//                }
-//                
-//                if self.displayState == .toOn {
-//                    if self.t >= self.snapThreshhold {
-//                        self.ignoreGestureRecognizerActions = true
-//                        setDisplayState(.on)
-//                    }
-//                }
-//                
-//                break
-//                
-//            case .ended:
-//                fallthrough
-//            case .cancelled:
-//                if self.displayState.isOn {
-//                    setDisplayState(.on)
-//                }
-//                else {
-//                    setDisplayState(.off)
-//                }
-//                
-//                break
-//                
-//            default:
-//                break
-//                
-//            }
-//        }
-//        
-//        // cancel ignored actions on end of gesture
-//        switch recognizer.state {
-//            
-//        case .ended:
-//            fallthrough
-//        case .cancelled:
-//            fallthrough
-//        case .failed:
-//            self.ignoreGestureRecognizerActions = false
-//            break
-//            
-//        default:
-//            break
-//            
-//        }
+
+    // NEXT: display state custom for manual t
+    @objc private func deepTouchEvents(recognizer: DeepTouchGestureRecognizer) {
+        switch recognizer.state {
+        case .began:
+            print("deep touch recognition began")
+            self.panGestureRecognizer.cancel() //TODO: move this elsewhere?
+            self.animation = nil
+            
+            fallthrough
+        case .changed:
+            if self.deepTouchStartingConditions == nil {
+                self.deepTouchStartingConditions = (position: recognizer.location(in: nil), time: CACurrentMediaTime(), value: self.on)
+            }
+            
+            if let startingConditions = self.deepTouchStartingConditions {
+                let p1 = recognizer.location(in: nil)
+                let localPoint = self.convert(p1, from: nil)
+                
+                // TODO: cancellation
+                
+                if startingConditions.value {
+                    if self.on {
+                        self.lightHapticGenerator.prepare()
+                        
+                        if self.t >= self.snapOffT {
+                            self.setOn(false, animated: false)
+                            
+                            self.lightHapticGenerator.impactOccurred()
+                            
+                            self.sendActions(for: .valueChanged)
+                        }
+                        
+                        self.t = self.snapOnT + log10(1 + recognizer.t)
+                    }
+                    else {
+                        self.t = self.snapOnT + log10(1 + recognizer.t)
+                    }
+                }
+                else {
+                    if self.on {
+                        // ignore -- incidentally, this also prevents interference with the animation
+                    }
+                    else {
+                        self.hapticGenerator.prepare()
+                        
+                        self.t = recognizer.t
+                        
+                        if self.t >= self.snapOnT {
+                            self.on = true
+                            
+                            self.hapticGenerator.impactOccurred()
+                            
+                            self.sendActions(for: .valueChanged)
+                        }
+                    }
+                }
+            }
+        case .ended:
+            if let startingConditions = self.deepTouchStartingConditions {
+                // AB: mostly for off state
+                // TODO: depressed??
+                var oldState = self.state
+                if startingConditions.value {
+                    oldState.insert(.selected)
+                }
+                else {
+                    oldState.remove(.selected)
+                }
+                updateDisplayState(oldValue: oldState, animated: true)
+                
+                self.deepTouchStartingConditions = nil
+            }
+            
+            break
+        case .cancelled:
+            print("deep touch gesture recognizer cancelled")
+            fallthrough
+        default:
+            if let startingConditions = self.deepTouchStartingConditions {
+                self.on = startingConditions.value
+                
+                self.deepTouchStartingConditions = nil
+            }
+        }
     }
     
     // MARK: - Rendering -
     
     override func draw(_ rect: CGRect) {
         if let block = renderBlock {
-            block(self.t, self.snapThreshhold, rect, self.bounds, self.state, self.on)
+            block(self.t, self.snapOnT, rect, self.bounds, self.state, self.on)
         }
     }
     
@@ -452,8 +480,58 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
     
+    // MARK: - Gesture Recognizers -
+    
+    // NEXT: figure out a way to cancel simple pan as soon as any other gesture recognizer is begun
     // prevents gesture from eating up scroll view pan
-//    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+//        print("other gesture recognizer: \(type(of:otherGestureRecognizer)) w/state \(otherGestureRecognizer.state.rawValue)")
+        
+        if gestureRecognizer == self.panGestureRecognizer {
+            switch otherGestureRecognizer.state {
+            case .began:
+                fallthrough
+            case .changed:
+                gestureRecognizer.cancel()
+                return true
+                
+            case .possible:
+                fallthrough
+            case .ended:
+                fallthrough
+            case .cancelled:
+                fallthrough
+            case .failed:
+                return true
+            }
+        }
+        
+        else if gestureRecognizer == self.deepTouchGestureRecognizer {
+            switch otherGestureRecognizer.state {
+            case .began:
+                fallthrough
+            case .changed:
+                if otherGestureRecognizer != self.panGestureRecognizer {
+                    gestureRecognizer.cancel()
+                }
+                return true
+                
+            case .possible:
+                fallthrough
+            case .ended:
+                fallthrough
+            case .cancelled:
+                fallthrough
+            case .failed:
+                return true
+            }
+        }
+        
+//        if gestureRecognizer == self.panGestureRecognizer {
+//            self.panGestureRecognizer.isEnabled = false
+//            self.panGestureRecognizer.isEnabled = true
+//        }
+        
 ////        if gestureRecognizer == self.tapGestureRecognizer {
 //        if false {
 //            return false
@@ -474,8 +552,8 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
 //            }
 //        }
 //        
-//        return false
-//    }
+        return true
+    }
 
     // MARK: - Helper Classes -
     
@@ -491,9 +569,11 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 self.state = .began
             }
             
-            for touch in touches {
-                if touch != self.firstTouch {
-                    self.ignore(touch, for: event)
+            if self.firstTouch != nil {
+                for touch in touches {
+                    if touch != self.firstTouch {
+                        self.ignore(touch, for: event)
+                    }
                 }
             }
         }
@@ -529,17 +609,11 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     class DeepTouchGestureRecognizer: UIGestureRecognizer {
         var minimumForce: Double = 0.15 //standard-ish tap
         var nonForceDefaultValue: Double = 1
+        var forceScaleFactor: Double = 1
         
         private(set) var t: Double = 0
-        var forceScaleFactor: Double
         
         private var firstTouch: UITouch?
-        
-        required init(target: AnyObject?, action: Selector, forceScaleFactor: Double) {
-            self.forceScaleFactor = forceScaleFactor
-            
-            super.init(target: target, action: action)
-        }
         
         private func force(_ touch: UITouch) -> Double {
             var shouldCheckForce = true
@@ -573,9 +647,11 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 }
             }
             
-            for touch in touches {
-                if touch != self.firstTouch {
-                    self.ignore(touch, for: event)
+            if self.firstTouch != nil {
+                for touch in touches {
+                    if touch != self.firstTouch {
+                        self.ignore(touch, for: event)
+                    }
                 }
             }
         }
@@ -625,6 +701,8 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
 }
+
+// MARK: -
 
 // MARK: - Tweening Functions -
 
