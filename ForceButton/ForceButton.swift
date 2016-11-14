@@ -34,8 +34,11 @@ extension UIControlState {
 
 // AB: not using .highlighted because highlights are automatic and we need manual control
 extension UIControlState {
+    //static let manualControl: UIControlState = {
+    //    return UIControlState.customMask(n: 0)
+    //}()
     static let depressed: UIControlState = {
-        return UIControlState.customMask(n: 0)
+        return UIControlState.customMask(n: 1)
     }()
 }
 
@@ -44,6 +47,8 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // as a separate property and causes the button to change its display state. The second is the display
     // state provided by UIControl. This is what actually corresponds to the visible button state. By default,
     // display state changes are animated.
+    
+    static let StandardTapForce: Double = 0.18 //0.15 according to Apple docs, but 0.18 works slightly better for this case
     
     // MARK: - Properties -
     
@@ -73,6 +78,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         didSet {
             // KLUDGE: prevents isSelected from overwriting isDepressed; also causes update to be called a few extra times
             let oldState = self.state
+            let oldT = self.t
             
             let previousDisabledAnimations = self.disableAutomaticAnimations
             self.disableAutomaticAnimations = true
@@ -80,7 +86,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             self.isSelected = on
             self.disableAutomaticAnimations = previousDisabledAnimations
             
-            self.updateDisplayState(oldValue: oldState, animated: !self.disableAutomaticAnimations)
+            self.updateDisplayState(oldValue: oldState, oldT: oldT, animated: !self.disableAutomaticAnimations)
         }
     }
     func setOn(_ on: Bool, animated: Bool) {
@@ -107,9 +113,6 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     }
     
     // MARK: Appearance Constants, Etc.
-    
-    static let stateTransitionQuick: TimeInterval = 0.3
-    static let stateTransitionLong: TimeInterval = stateTransitionQuick
     
     // AB: If you wish to add more t-based states, simply override statesContributingToAppearance and t(forState:).
     // The duration and tweening function overrides are optional. You don't have to override the state property;
@@ -158,26 +161,31 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // optional override point for custom states
     func duration(fromState: UIControlState, toState: UIControlState) -> TimeInterval {
-        return builtInStateTransitionToDuration[fromState]?[toState] ?? ForceButton.stateTransitionQuick
+        return builtInStateTransitionToDuration[fromState]?[toState] ?? 0.1
     }
     private var builtInStateTransitionToDuration: [UIControlState:[UIControlState:TimeInterval]] {
         get {
+            let quick: TimeInterval = 0.1
+            let cancel = quick
+            let long: TimeInterval = 0.2
+            let bouncy: TimeInterval = 0.4
+            
             return [
                 .normal: [
-                    .depressed: ForceButton.stateTransitionQuick,
-                    .selected: ForceButton.stateTransitionLong
+                    .depressed: quick,
+                    .selected: bouncy
                 ],
                 .depressed: [
-                    .normal: ForceButton.stateTransitionQuick,
-                    .selected: ForceButton.stateTransitionQuick
+                    .normal: cancel,
+                    .selected: 0.05
                 ],
                 .selected: [
-                    .normal: ForceButton.stateTransitionLong,
-                    [.selected, .depressed]: ForceButton.stateTransitionQuick
+                    .normal: long,
+                    [.selected, .depressed]: cancel
                 ],
                 [.selected, .depressed]: [
-                    .selected: ForceButton.stateTransitionQuick,
-                    .normal: ForceButton.stateTransitionQuick
+                    .selected: cancel,
+                    .normal: long
                 ]
             ]
         }
@@ -185,43 +193,28 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // optional override point for custom states
     func tweeningFunction(fromState: UIControlState, toState: UIControlState) -> ((Double)->Double) {
-        return builtInStateTransitionToTweeningFunction[fromState]?[toState] ?? easeOutCubic
+        return easeOutCubic
     }
-    private var builtInStateTransitionToTweeningFunction: [UIControlState:[UIControlState:((Double)->Double)]] {
-        get {
-            return [
-                .normal: [
-                    //            .depressed: dampenedSine,
-                    .depressed: easeOutCubic,
-                    .selected: easeOutCubic
-                ],
-                .depressed: [
-                    //            .normal: dampenedSine,
-                    .normal: easeOutCubic,
-                    .selected: easeOutCubic
-                ],
-                .selected: [
-                    //            .normal: dampenedSine,
-                    .normal: easeOutCubic,
-                    [.selected, .depressed]: easeOutCubic
-                ],
-                [.selected, .depressed]: [
-                    .selected: easeOutCubic,
-                    .normal: easeOutCubic
-                    //            .normal: dampenedSine
-                ]
-            ]
+    
+    // optional override point for custom states
+    func additiveFunction(fromState: UIControlState, toState: UIControlState) -> ((Double)->Double)? {
+        // TODO: move to subclass
+        if fromState == .normal {
+            if toState == .selected {
+                return dampenedSine
+            }
         }
+        
+        return nil
     }
     
     private let snapOnT: Double = 0.4
     private let snapOffT: Double = 0.5
-//    private let cancellationThreshhold: CGFloat = 16
-    private let cancellationThreshhold: CGFloat = 100
+    private let cancellationThreshhold: CGFloat = 16
     
     // MARK: Display State
     
-    func updateDisplayState(settingSubState subState: UIControlState, toOn on: Bool) {
+    func updateDisplayState(settingSubState subState: UIControlState, toOn on: Bool, forced: Bool = false) {
         var oldState = self.state
         
         if on {
@@ -231,10 +224,10 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             oldState.insert(subState)
         }
         
-        self.updateDisplayState(oldValue: oldState, animated: !self.disableAutomaticAnimations)
+        self.updateDisplayState(oldValue: oldState, oldT: self.t, animated: !self.disableAutomaticAnimations, forced: forced)
     }
     
-    internal func updateDisplayState(oldValue: UIControlState, animated: Bool) {
+    internal func updateDisplayState(oldValue: UIControlState, oldT: Double, animated: Bool, forced: Bool = false) {
         // AB: only some of the UIControl states affect appearance
         func condenseState(_ state: UIControlState) -> UIControlState {
             var returnState: UIControlState = .normal
@@ -249,11 +242,15 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         let oldValue = condenseState(oldValue)
         let newValue = condenseState(self.state)
         
-        if oldValue == newValue {
+        // when is forced applicable? when we're not animating but are off with our t and want to animate it
+        if !forced && oldValue == newValue {
             return
         }
         
-        guard let targetT: Double = t(forState: newValue) else {
+        let baseT: Double = oldT
+        guard
+            let targetT: Double = t(forState: newValue)
+            else {
             assert(false, "unable to handle state transition from \(oldValue.rawValue) to \(newValue.rawValue)")
             return
         }
@@ -263,15 +260,19 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         
         if animated {
             let tweeningFunction = self.tweeningFunction(fromState: oldValue, toState: newValue)
+            let additiveFunction = self.additiveFunction(fromState: oldValue, toState: newValue)
             let duration = self.duration(fromState: oldValue, toState: newValue)
+            
+            //print("animating from \(debugStateBits(oldValue)) to \(debugStateBits(self.state)) with duration \(duration)")
             
             self.animation = (
                 delay: 0,
-                start: self.t,
+                start: baseT,
                 end: targetT,
                 startTime: TimeInterval(CFAbsoluteTimeGetCurrent()),
                 duration: duration,
-                function: tweeningFunction
+                function: tweeningFunction,
+                additiveFunction: additiveFunction
             )
         }
         else {
@@ -292,15 +293,17 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // MARK: Animation
     
     private var animationDisplayLink: CADisplayLink?
-    private var animation: (delay: Double, start: Double, end: Double, startTime: TimeInterval, duration: TimeInterval, function: ((Double)->Double))? {
+    private var animation: (delay: Double, start: Double, end: Double, startTime: TimeInterval, duration: TimeInterval, function: ((Double)->Double), additiveFunction:((Double)->Double)?)? {
         didSet {
             if let displayLink = self.animationDisplayLink {
                 DebuggingDeregisterDisplayLink()
-                self.animationDisplayLink?.invalidate()
+                displayLink.invalidate()
                 self.animationDisplayLink = nil
             }
             
-            if animation != nil {
+            if let animation = self.animation {
+                self.t = animation.start
+                
                 let animationDisplayLink = CADisplayLink.init(target: self, selector: #selector(animation(displayLink:)))
                 DebuggingRegisterDisplayLink()
                 animationDisplayLink.add(to: RunLoop.main, forMode: RunLoopMode.commonModes)
@@ -383,7 +386,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 self.tapStartingConditions = (position: recognizer.location(in: nil), time: CACurrentMediaTime(), value: self.on)
             }
             
-            if let startingConditions = self.tapStartingConditions {
+            if let _  = self.tapStartingConditions {
                 let p1 = recognizer.location(in: nil)
                 let localPoint = self.convert(p1, from: nil)
                 
@@ -489,11 +492,13 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             }
         case .ended:
             if let startingConditions = self.deepTouchStartingConditions {
-                // AB: mostly for off state
-                // TODO: depressed??
-                
-                self.isSelected = !self.on
-                self.isSelected = self.on
+                // AB: force animation if we're on the wrong t, even if the state is correct; happens on 'off'
+                // KLUDGE: we don't do this on 'on' b/c 'on' starts ignoring the gesture after triggering
+                if !self.on && self.t != t(forState: self.state) {
+                    let value: Bool = startingConditions.value
+                    let oldState: UIControlState = (value ? UIControlState.selected : UIControlState.normal)
+                    updateDisplayState(oldValue: oldState, oldT: self.t, animated: true, forced: true)
+                }
                 
                 self.deepTouchStartingConditions = nil
             }
@@ -512,6 +517,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 else {
                     self.disableAutomaticAnimations = true
                     let oldState: UIControlState
+                    let oldT = self.t
                     stateStuff: do {
                         self.isSelected = !startingConditions.value
                         oldState = self.state
@@ -521,7 +527,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                     }
                     self.disableAutomaticAnimations = false
                     
-                    updateDisplayState(oldValue: oldState, animated: true)
+                    updateDisplayState(oldValue: oldState, oldT: oldT, animated: true)
                 }
                 
                 self.deepTouchStartingConditions = nil
@@ -530,7 +536,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     }
     
     // MARK: - Rendering -
-    
+
     override func draw(_ rect: CGRect) {
         if let block = renderBlock {
             block(self.t, self.snapOnT, rect, self.bounds, self.state, self.on)
@@ -541,7 +547,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         guard let animation = self.animation else {
             if let displayLink = self.animationDisplayLink {
                 DebuggingDeregisterDisplayLink()
-                self.animationDisplayLink?.invalidate()
+                displayLink.invalidate()
                 self.animationDisplayLink = nil
             }
             
@@ -552,10 +558,17 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         let time = TimeInterval(CFAbsoluteTimeGetCurrent())
         let t = max(min(Double((time - actualStartTime) / animation.duration), 1), 0)
         let actualT = animation.function(t)
-        let delta = animation.end - animation.start
-        let value = animation.start + delta * actualT
+        let additiveT: Double
+        if let additiveFunction = animation.additiveFunction {
+            additiveT = additiveFunction(t)
+        }
+        else {
+            additiveT = 0
+        }
+        let value = animation.start + actualT * (animation.end - animation.start)
+        //print("\(displayLink.hashValue): \(t) -> \(actualT) (\(value + additiveT))")
         
-        self.t = value
+        self.t = value + additiveT
         
         if t >= 1 {
             self.animation = nil
@@ -699,7 +712,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // less of a gesture; more of a pressure sensor
     class DeepTouchGestureRecognizer: UIGestureRecognizer {
-        var minimumForce: Double = 0.15 //standard-ish tap
+        var minimumForce: Double = ForceButton.StandardTapForce //standard-ish tap
         var nonForceDefaultValue: Double = 1
         var forceScaleFactor: Double = 1
         
@@ -799,12 +812,14 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
 // MARK: - Tweening Functions -
 
 func dampenedSine(_ t: Double) -> Double {
-    let initialAmplitude: Double = 0.25
-    let decayConstant: Double = 5
+    let initialAmplitude: Double = 0.5
+    let decayConstant: Double = 4.5
     let numberOfBounces: Double = 2
     let angularFrequency: Double = 2 * M_PI * numberOfBounces
     
-    return initialAmplitude * pow(M_E, -decayConstant * t) * sin(angularFrequency * t)
+    let returnT = initialAmplitude * pow(M_E, -decayConstant * t) * sin(angularFrequency * t)
+    
+    return returnT
 }
 
 func easeOutCubic(_ t: Double) -> Double {
