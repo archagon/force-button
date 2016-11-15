@@ -360,6 +360,11 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         // and do nothing on 'unknown'
     }
     
+    func cancelTouches() {
+        self.panGestureRecognizer.cancel()
+        self.deepTouchGestureRecognizer.cancel()
+    }
+    
     // MARK: - Actions -
     
     // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
