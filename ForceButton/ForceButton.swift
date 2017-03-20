@@ -9,39 +9,6 @@
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-extension UIControlState {
-    static func customMask(n: Int) -> UIControlState {
-        var applicationMask: UIControlState?
-        
-        var applicationBits = UIControlState.application.rawValue
-        var foundBits = 0
-        for i: UInt in 0..<32 {
-            if (applicationBits & 0x1) > 0 {
-                if foundBits == n {
-                    applicationMask = UIControlState(rawValue: (UIControlState.application.rawValue & (0x1 << i)))
-                    break
-                }
-                foundBits += 1
-            }
-            applicationBits >>= 1
-        }
-        
-        assert(applicationMask != nil, "could not find any free application mask bits")
-        
-        return applicationMask!
-    }
-}
-
-// AB: not using .highlighted because highlights are automatic and we need manual control
-extension UIControlState {
-    //static let manualControl: UIControlState = {
-    //    return UIControlState.customMask(n: 0)
-    //}()
-    static let depressed: UIControlState = {
-        return UIControlState.customMask(n: 1)
-    }()
-}
-
 class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // AB: There are two types of state to track here. First, there's the value state — on or off. This is stored
     // as a separate property and causes the button to change its display state. The second is the display
@@ -856,5 +823,132 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 self.state = .cancelled
             }
         }
+    }
+}
+
+// MARK: - Helpers -
+
+// MARK: Extensions
+
+fileprivate extension UIControlState {
+    static func customMask(n: Int) -> UIControlState {
+        var applicationMask: UIControlState?
+        
+        var applicationBits = UIControlState.application.rawValue
+        var foundBits = 0
+        for i: UInt in 0..<32 {
+            if (applicationBits & 0x1) > 0 {
+                if foundBits == n {
+                    applicationMask = UIControlState(rawValue: (UIControlState.application.rawValue & (0x1 << i)))
+                    break
+                }
+                foundBits += 1
+            }
+            applicationBits >>= 1
+        }
+        
+        assert(applicationMask != nil, "could not find any free application mask bits")
+        
+        return applicationMask!
+    }
+}
+
+// AB: not using .highlighted because highlights are automatic and we need manual control
+extension UIControlState {
+    //static let manualControl: UIControlState = {
+    //    return UIControlState.customMask(n: 0)
+    //}()
+    static let depressed: UIControlState = {
+        return UIControlState.customMask(n: 1)
+    }()
+}
+
+extension UIControlState: Hashable {
+    public var hashValue: Int {
+        get {
+            return self.rawValue.hashValue
+        }
+    }
+}
+
+fileprivate extension UIGestureRecognizer {
+    func cancel() {
+        let wasEnabled = self.isEnabled
+        self.isEnabled = false
+        self.isEnabled = wasEnabled
+    }
+}
+
+// MARK: Easing Functions
+
+fileprivate func easeOutCubic(_ t: Double) -> Double {
+    return max(min(1 - pow(1 - t, 3), 1), 0)
+}
+
+fileprivate func dampenedSine(_ t: Double) -> Double {
+    let initialAmplitude: Double = 0.5
+    let decayConstant: Double = 4.5
+    let numberOfBounces: Double = 2
+    let angularFrequency: Double = 2 * Double.pi * numberOfBounces
+    
+    let returnT = initialAmplitude * pow(M_E, -decayConstant * t) * sin(angularFrequency * t)
+    
+    return returnT
+}
+
+// MARK: Debugging
+
+// AB: these aren't terribly useful for general use, but I use them in another project so they're stayin' in
+
+fileprivate let DebuggingPrintMessages: Bool = false
+
+fileprivate let DebuggingPrintInterval: TimeInterval = 0.5
+fileprivate var DebuggingDisplayLinks = 0
+fileprivate var DebuggingLastPrint: TimeInterval = 0
+
+func DebuggingRegisterDisplayLink(_ print: Bool = true) {
+    DebuggingDisplayLinks += 1
+    
+    if print {
+        DebuggingPrint()
+    }
+}
+
+fileprivate func DebuggingDeregisterDisplayLink(_ print: Bool = true) {
+    DebuggingDisplayLinks -= 1
+    
+    if print {
+        DebuggingPrint()
+    }
+}
+
+fileprivate func DebuggingPrint() {
+    let time = CACurrentMediaTime()
+    
+    var shouldPrint: Bool
+    
+    if DebuggingLastPrint == 0 {
+        shouldPrint = true
+    }
+    else {
+        let delta = time - DebuggingLastPrint
+        
+        if delta > DebuggingPrintInterval {
+            shouldPrint = true
+        }
+        else {
+            shouldPrint = false
+        }
+    }
+    
+    shouldPrint = (DebuggingPrintMessages ? shouldPrint : false)
+    
+    if shouldPrint {
+        print("\n")
+        print("――――――――DEBUG――――――――")
+        print("‣ FB Display Links: \(DebuggingDisplayLinks)")
+        print("―――――――――――――――――――――")
+        
+        DebuggingLastPrint = time
     }
 }

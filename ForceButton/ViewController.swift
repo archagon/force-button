@@ -44,7 +44,7 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
             button.bottomAnchor.constraint(equalTo: self.bottomAnchor).isActive = true
             button.rightAnchor.constraint(equalTo: self.rightAnchor).isActive = true
             
-            button.renderBlock = { (t: Double, threshhold: Double, rect: CGRect, bounds: CGRect, state: ForceButton.State) in
+            button.renderBlock = { (_ t: Double, _ threshhold: Double, _ rect: CGRect, _ bounds: CGRect, _ state: UIControlState, _ value: Bool) in
                 let tOffset = ForceButton.StandardTapForce
                 
                 let cornerRadius: CGFloat = 4
@@ -63,7 +63,7 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
                 let adjustedWidth = widthCompression + (1 - min(max((upperInset/downInset), 0), 1)) * (1 - widthCompression)
                 
                 let downT = min(max(upperInset, 0)/downInset, 1)
-                let s = (state.isOn ? 1 : CGFloat(0.3 + downT * 0.7))
+                let s = (state == UIControlState.depressed ? 1 : CGFloat(0.3 + downT * 0.7))
                 let innerColor = UIColor(hue: 0.65, saturation: s, brightness: 1, alpha: 1)
                 let outsideDarkColor = UIColor(hue: 0.65, saturation: 0.5, brightness: 0.7, alpha: 1)
                 let insideDarkColor = UIColor.black
