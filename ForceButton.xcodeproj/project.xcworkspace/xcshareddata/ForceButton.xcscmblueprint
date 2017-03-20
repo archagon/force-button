@@ -1,0 +1,30 @@
+{
+  "DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey" : "7A9FCEAD77A00B99F433D91B15FD4D83622988E0",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyRepositoryLocationsKey" : {
+
+  },
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
+    "7A9FCEAD77A00B99F433D91B15FD4D83622988E0" : 9223372036854775807,
+    "E0958CE1C2F270E35D56242BB975B98DC574C0FF" : 9223372036854775807
+  },
+  "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "F5CFA9C5-4744-473F-A693-318D124B1F5D",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
+    "7A9FCEAD77A00B99F433D91B15FD4D83622988E0" : "force-button\/",
+    "E0958CE1C2F270E35D56242BB975B98DC574C0FF" : ".."
+  },
+  "DVTSourceControlWorkspaceBlueprintNameKey" : "ForceButton",
+  "DVTSourceControlWorkspaceBlueprintVersion" : 204,
+  "DVTSourceControlWorkspaceBlueprintRelativePathToProjectKey" : "ForceButton.xcodeproj",
+  "DVTSourceControlWorkspaceBlueprintRemoteRepositoriesKey" : [
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:archagon\/force-button.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "7A9FCEAD77A00B99F433D91B15FD4D83622988E0"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:archagon\/music-messages.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "E0958CE1C2F270E35D56242BB975B98DC574C0FF"
+    }
+  ]
+}
