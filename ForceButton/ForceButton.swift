@@ -9,6 +9,10 @@
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
+// TWO TASKS:
+//  a) pop-up menu on force touch
+//  b) combined notes on adjascent touch
+
 class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // AB: There are two types of state to track here. First, there's the value state — on or off. This is stored
     // as a separate property and causes the button to change its display state. The second is the display
@@ -39,6 +43,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // MARK: Public State Properties
     
     // AB: not my favorite way of doing things, but oh well
+    // TODO: internal/private
     internal var disableAutomaticAnimations: Bool = false
     
     var on: Bool = false {
@@ -198,6 +203,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         self.updateDisplayState(oldValue: oldState, oldT: self.t, animated: !self.disableAutomaticAnimations, forced: forced)
     }
     
+    // TODO: internal
     internal func updateDisplayState(oldValue: UIControlState, oldT: Double, animated: Bool, forced: Bool = false) {
         func debugStateBits(_ state: UIControlState) -> String {
             var string = ""
@@ -234,6 +240,8 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             return
         }
         
+        //print("updating display state from \(debugStateBits(oldValue))/\(oldT) -> \(debugStateBits(newValue))")
+        
         let baseT: Double = oldT
         guard
             let targetT: Double = t(forState: newValue)
@@ -267,6 +275,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
     
+    // AB: suggested that this not be touched from the outside, as animations/state will interfere
     var t: Double = 0 {
         didSet {
             self.setNeedsDisplay()
@@ -435,6 +444,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             print("tap gesture recognizer failed")
             fallthrough
         default:
+            // TOOD: cancellation animation
             if let startingConditions = self.tapStartingConditions {
                 // this also takes care of animations
                 if self.on != startingConditions.value {
@@ -446,18 +456,18 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 self.tapStartingConditions = nil
             }
             
+            // TODO: move
             self.isDepressed = false
             
             break
         }
     }
 
-    // NEXT: display state custom for manual t
     @objc private func deepTouchEvents(recognizer: DeepTouchGestureRecognizer) {
         switch recognizer.state {
         case .began:
             print("deep touch recognition began")
-            self.panGestureRecognizer.cancel() //TODO: move this elsewhere?
+            self.panGestureRecognizer.cancel() //TODO: move this elsewhere? NEXT:
             self.animation = nil
             
             fallthrough
@@ -467,8 +477,8 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             }
             
             if let startingConditions = self.deepTouchStartingConditions {
-                let p1 = recognizer.location(in: nil)
-                let localPoint = self.convert(p1, from: nil)
+                //let p1 = recognizer.location(in: nil)
+                //let localPoint = self.convert(p1, from: nil)
                 
                 let normalizedT = min(max((recognizer.t - recognizer.minimumForce) / (1 - recognizer.minimumForce), 0), 1)
                 
@@ -534,6 +544,8 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
                     self.sendActions(for: .valueChanged)
                 }
                 else {
+                    // TODO: make sure this is actually correct -- fake state to ensure animation; prolly need something else,
+                    // like animation for going from same state to same state
                     self.disableAutomaticAnimations = true
                     let oldState: UIControlState
                     let oldT = self.t
