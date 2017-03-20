@@ -72,7 +72,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // MARK: Public State Properties
     
     // AB: not my favorite way of doing things, but oh well
-    private(set) var disableAutomaticAnimations: Bool = false
+    internal var disableAutomaticAnimations: Bool = false
     
     var on: Bool = false {
         didSet {
@@ -93,7 +93,6 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         self.disableAutomaticAnimations = !animated
         self.on = on
         self.disableAutomaticAnimations = false
-        
     }
     
     var isDepressed: Bool = false {
@@ -145,18 +144,23 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // override point for custom states
     func t(forState state: UIControlState) -> Double? {
-        return builtInStateT[state]
-    }
-    private var builtInStateT: [UIControlState:Double] {
-        get {
-            return [
-                .normal: 0,                     //off
-                //.depressed: 0.5,                //off->on highlight
-                .depressed: 0.1, //TODO: figure out how to make tap and deep touch coexist
-                .selected: 0.4,                 //on
-                [.selected, .depressed]: 0.5    //on->off highlight
-            ]
+        // AB: it's hard to go from deep highlights to 3d touch convincingly, so we decrease the highlights in 3d touch mode
+        let is3dTouchEnabled = (self.traitCollection.forceTouchCapability == .available)
+
+        if state == .normal {
+            return 0
         }
+        else if state == .depressed {
+            return (is3dTouchEnabled ? 0.1 : 0.25)
+        }
+        else if state == .selected {
+            return 0.4
+        }
+        else if state == [.selected, .depressed] {
+            return (is3dTouchEnabled ? 0.5 : 0.6)
+        }
+        
+        return nil
     }
     
     // optional override point for custom states
@@ -228,6 +232,22 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     }
     
     internal func updateDisplayState(oldValue: UIControlState, oldT: Double, animated: Bool, forced: Bool = false) {
+        func debugStateBits(_ state: UIControlState) -> String {
+            var string = ""
+            
+            if state.contains(.depressed) {
+                string += "d"
+            }
+            if state.contains(.selected) {
+                string += "s"
+            }
+            if state.contains(UIControlState.customMask(n: 2)) {
+                string += "h"
+            }
+            
+            return "["+string+"]"
+        }
+        
         // AB: only some of the UIControl states affect appearance
         func condenseState(_ state: UIControlState) -> UIControlState {
             var returnState: UIControlState = .normal
@@ -316,6 +336,30 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     private var panGestureRecognizer: SimpleMovementGestureRecognizer!
     private var deepTouchGestureRecognizer: DeepTouchGestureRecognizer!
+    var is3dTouching: Bool {
+        get {
+            if deepTouchGestureRecognizer.isEnabled {
+                switch deepTouchGestureRecognizer.state {
+                case .began:
+                    fallthrough
+                case .changed:
+                    return true
+                    
+                case .cancelled:
+                    fallthrough
+                case .ended:
+                    fallthrough
+                case .failed:
+                    fallthrough
+                case .possible:
+                    return false
+                }
+            }
+            else {
+                return false
+            }
+        }
+    }
     
     // MARK: Hardware
     
@@ -419,6 +463,9 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             
         case .cancelled:
             print("tap gesture recognizer cancelled")
+            fallthrough
+        case .failed:
+            print("tap gesture recognizer failed")
             fallthrough
         default:
             if let startingConditions = self.tapStartingConditions {
@@ -580,7 +627,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             
             if let displayLink = self.animationDisplayLink {
                 DebuggingDeregisterDisplayLink()
-                self.animationDisplayLink?.invalidate()
+                displayLink.invalidate()
                 self.animationDisplayLink = nil
             }
         }
@@ -810,23 +857,4 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             }
         }
     }
-}
-
-// MARK: -
-
-// MARK: - Tweening Functions -
-
-func dampenedSine(_ t: Double) -> Double {
-    let initialAmplitude: Double = 0.5
-    let decayConstant: Double = 4.5
-    let numberOfBounces: Double = 2
-    let angularFrequency: Double = 2 * M_PI * numberOfBounces
-    
-    let returnT = initialAmplitude * pow(M_E, -decayConstant * t) * sin(angularFrequency * t)
-    
-    return returnT
-}
-
-func easeOutCubic(_ t: Double) -> Double {
-    return max(min(1 - pow(1 - t, 3), 1), 0)
 }

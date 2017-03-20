@@ -44,32 +44,56 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
             button.bottomAnchor.constraint(equalTo: self.bottomAnchor).isActive = true
             button.rightAnchor.constraint(equalTo: self.rightAnchor).isActive = true
             
-            button.addTarget(self, action: #selector(action(button:)), for: .valueChanged)
-            
             button.renderBlock = { (t: Double, threshhold: Double, rect: CGRect, bounds: CGRect, state: ForceButton.State) in
-                let offset: CGFloat = bounds.size.width * 0.2
-                let actualOffset: CGFloat = offset - CGFloat(t) * (offset * 0.98)
+                let tOffset = ForceButton.StandardTapForce
                 
-                let s = (state.isOn ? 1 : CGFloat(min(0.25 + t / threshhold, 1)))
+                let cornerRadius: CGFloat = 4
+                let upInset: CGFloat = 8
+                let downInset: CGFloat = 8
+                let widthCompression: CGFloat = 0.95
+                
+                let tScale = 1 - tOffset
+                let normalizedT = max((t - tOffset) / tScale, 0)
+                let normalizedThreshhold = max((threshhold - tOffset) / tScale, 0)
+                let adjustedT: CGFloat = CGFloat(normalizedT) / CGFloat(normalizedThreshhold)
+                
+                let totalInset = upInset + downInset
+                let lowerInset = max(8 - (adjustedT * totalInset), 0)
+                let upperInset = max(-8 + (adjustedT * totalInset), 0)
+                let adjustedWidth = widthCompression + (1 - min(max((upperInset/downInset), 0), 1)) * (1 - widthCompression)
+                
+                let downT = min(max(upperInset, 0)/downInset, 1)
+                let s = (state.isOn ? 1 : CGFloat(0.3 + downT * 0.7))
                 let innerColor = UIColor(hue: 0.65, saturation: s, brightness: 1, alpha: 1)
+                let outsideDarkColor = UIColor(hue: 0.65, saturation: 0.5, brightness: 0.7, alpha: 1)
+                let insideDarkColor = UIColor.black
+                
+                let clip = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
+                
+                let lowerPath = UIBezierPath(roundedRect: CGRect(x: 0, y: upInset, width: bounds.size.width, height: bounds.size.height - upInset), cornerRadius: cornerRadius)
+                let upperPath = UIBezierPath(roundedRect: CGRect(
+                    x: (bounds.size.width - (adjustedWidth * bounds.size.width)) / 2.0,
+                    y: upperInset + (upInset - lowerInset),
+                    width: adjustedWidth * bounds.size.width,
+                    height: bounds.size.height - upperInset - lowerInset), cornerRadius: cornerRadius)
+                
+                clip.addClip()
+                
+                if upperInset > 0 {
+                    insideDarkColor.setFill()
+                }
+                else {
+                    outsideDarkColor.setFill()
+                }
+                lowerPath.fill()
                 
                 innerColor.setFill()
-                let path = UIBezierPath(rect: CGRect(x: actualOffset, y: actualOffset, width: bounds.size.width - actualOffset * 2, height: bounds.size.height - actualOffset * 2))
-                path.fill()
+                upperPath.fill()
             }
         }
         
         required init?(coder aDecoder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
-        }
-        
-        func action(button: ForceButton) {
-            if button.on {
-                self.perform(#selector(ding), with: nil, afterDelay: 0.05, inModes: [RunLoopMode.commonModes])
-            }
-        }
-        func ding() {
-            AudioServicesPlaySystemSound(0x450)
         }
     }
     
@@ -78,8 +102,8 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         
         let layout = UICollectionViewFlowLayout()
         layout.itemSize = CGSize(width: 60, height: 60)
-        layout.minimumLineSpacing = 0
-        layout.minimumInteritemSpacing = 0
+        layout.minimumLineSpacing = 4
+        layout.minimumInteritemSpacing = 16
         
         let collection = SlideyCollection(frame: CGRect(x: 0, y: 0, width: 100, height: 100), collectionViewLayout: layout)
         collection.dataSource = self
