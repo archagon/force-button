@@ -12,6 +12,9 @@
 		4E00FADF1DA5A64F00CD1D73 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4E00FADD1DA5A64F00CD1D73 /* Main.storyboard */; };
 		4E00FAE11DA5A64F00CD1D73 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4E00FAE01DA5A64F00CD1D73 /* Assets.xcassets */; };
 		4E00FAE41DA5A64F00CD1D73 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4E00FAE21DA5A64F00CD1D73 /* LaunchScreen.storyboard */; };
+		4E228C311E85A394009F88FA /* SimpleGestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E228C301E85A394009F88FA /* SimpleGestures.swift */; };
+		4E26C0621E806B40002FA204 /* DemoButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E26C0611E806B40002FA204 /* DemoButton.swift */; };
+		4E26C0651E809B66002FA204 /* SelectionPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E26C0641E809B66002FA204 /* SelectionPopup.swift */; };
 		4E7685E31DA611E100AD0562 /* ForceButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E7685E21DA611E100AD0562 /* ForceButton.swift */; };
 /* End PBXBuildFile section */
 
@@ -23,6 +26,9 @@
 		4E00FAE01DA5A64F00CD1D73 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4E00FAE31DA5A64F00CD1D73 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4E00FAE51DA5A64F00CD1D73 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4E228C301E85A394009F88FA /* SimpleGestures.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimpleGestures.swift; sourceTree = "<group>"; };
+		4E26C0611E806B40002FA204 /* DemoButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoButton.swift; sourceTree = "<group>"; };
+		4E26C0641E809B66002FA204 /* SelectionPopup.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SelectionPopup.swift; sourceTree = "<group>"; };
 		4E7685E21DA611E100AD0562 /* ForceButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ForceButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -56,15 +62,26 @@
 		4E00FAD81DA5A64F00CD1D73 /* ForceButton */ = {
 			isa = PBXGroup;
 			children = (
+				4E7685E21DA611E100AD0562 /* ForceButton.swift */,
+				4E228C301E85A394009F88FA /* SimpleGestures.swift */,
+				4E26C0641E809B66002FA204 /* SelectionPopup.swift */,
+				4E26C0631E806C82002FA204 /* Demo */,
+			);
+			path = ForceButton;
+			sourceTree = "<group>";
+		};
+		4E26C0631E806C82002FA204 /* Demo */ = {
+			isa = PBXGroup;
+			children = (
 				4E00FAD91DA5A64F00CD1D73 /* AppDelegate.swift */,
 				4E00FADB1DA5A64F00CD1D73 /* ViewController.swift */,
-				4E7685E21DA611E100AD0562 /* ForceButton.swift */,
+				4E26C0611E806B40002FA204 /* DemoButton.swift */,
 				4E00FADD1DA5A64F00CD1D73 /* Main.storyboard */,
 				4E00FAE01DA5A64F00CD1D73 /* Assets.xcassets */,
 				4E00FAE21DA5A64F00CD1D73 /* LaunchScreen.storyboard */,
 				4E00FAE51DA5A64F00CD1D73 /* Info.plist */,
 			);
-			path = ForceButton;
+			name = Demo;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,8 +157,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4E26C0621E806B40002FA204 /* DemoButton.swift in Sources */,
 				4E00FADC1DA5A64F00CD1D73 /* ViewController.swift in Sources */,
 				4E7685E31DA611E100AD0562 /* ForceButton.swift in Sources */,
+				4E228C311E85A394009F88FA /* SimpleGestures.swift in Sources */,
+				4E26C0651E809B66002FA204 /* SelectionPopup.swift in Sources */,
 				4E00FADA1DA5A64F00CD1D73 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
