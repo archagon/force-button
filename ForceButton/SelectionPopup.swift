@@ -326,14 +326,16 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             case bloom
         }
         
+        // helpers
+        func fmodpos(a: CGFloat, b: CGFloat) -> CGFloat {
+            return a - b * floor(a / b)
+        }
         func easeOutCubic(_ t: CGFloat) -> CGFloat {
             return max(min(1 - pow(1 - t, 3), 1), 0)
         }
-        
         func circlePoint(c: CGPoint, r: CGFloat, a: CGFloat) -> CGPoint {
             return CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a))
         }
-        
         func addCircle(_ shape: UIBezierPath, c: CGPoint, r: CGFloat) {
             shape.close()
             shape.move(to: CGPoint(x: c.x + r, y: c.x))
@@ -1019,10 +1021,6 @@ extension SelectionPopup {
 }
 
 // MARK: - Helpers -
-
-fileprivate func fmodpos(a: CGFloat, b: CGFloat) -> CGFloat {
-    return a - b * floor(a / b)
-}
 
 fileprivate func newton(
     function: (CGFloat)->CGFloat,
