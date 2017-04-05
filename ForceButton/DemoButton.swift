@@ -734,8 +734,6 @@ class SimpleMovementGestureRecognizerThree: UIGestureRecognizer {
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesMoved(touches, with: event)
         
-        print("moving generic touch...")
-        
         if let touch = self.firstTouch, touches.contains(touch) {
             self.state = .changed
         }

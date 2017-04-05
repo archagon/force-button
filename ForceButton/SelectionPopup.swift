@@ -2,36 +2,16 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
 fileprivate let UIArbitraryStartingFrame = CGRect(x: 0, y: 0, width: 100, height: 100)
+fileprivate let DebugDraw = false
 
-// NEXT: one item popup
-// NEXT: t slides box around
-// NEXT: vertical
-// NEXT: 2x horizontal
-
-// NEXT: appearance when too thin
-// NEXT: fix contents box connection
-// NEXT: arbitrary position for stub
-// NEXT: stub attachment point
-// NEXT: show under button & match color
-// NEXT: connnection different if close to side a la keyboard popups
+// TODO: 2x horizontal
 
 protocol SelectionPopupDelegate {
 }
 
-// constants
-extension SelectionPopup {
-    // TODO: these should be instance variables
-    static let stubCompactSize = CGSize(width: 62.5 - 3, height: 60)
-    static let stubFullInsetSize = CGSize(width: 16, height: 16)
-    static let stubFullSize =  CGSize(width: stubCompactSize.width + stubFullInsetSize.width * 2,
-                                      height: stubCompactSize.height + stubFullInsetSize.height * 2)
-    
-    static let maximumSlopeAngle: CGFloat = 20
-    static let maximumSlopeBezierRadius: CGFloat = 32
-    static let minimumContentsMultiplierAlongStubAxis: CGFloat = 1.2
-}
-
 class SelectionPopup: UIView, UIGestureRecognizerDelegate {
+    // MARK: Properties
+    
     // general properties
     public var arrowDirection: UIPopoverArrowDirection = .down {
         didSet { sizeToFit() }
@@ -106,8 +86,25 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         didSet { sizeToFit() }
     }
     
+    // nitty-gritty layout properties
+    public var maximumAnchorSlopeAngle: CGFloat = 20 {
+        didSet { sizeToFit() }
+    }
+    public var maximumAnchorSlopeBezierRadius: CGFloat = 32 {
+        didSet { sizeToFit() }
+    }
+    public var minimumContentsMultiplierAlongAnchorAxis: CGFloat = 1.2 {
+        didSet { sizeToFit() }
+    }
+    
     // anchor properties
-    public var anchorPosition: (side: Int, position: CGFloat) = (0, CGFloat(arc4random_uniform(1000))/999.0) { //t,l,b,r -- +x,+y axis aligned (CG coords)
+    public var anchorCompactSize: CGSize = CGSize(width: 62.5 - 3, height: 60) {
+        didSet { sizeToFit() }
+    }
+    public var anchorExpandedInset: CGSize = CGSize(width: 16, height: 16) {
+        didSet { sizeToFit() }
+    }
+    public var anchorPosition: (side: Int, position: CGFloat) = (2, 0.5) { //t,l,b,r -- +x,+y axis aligned (CG coords)
         didSet { sizeToFit() }
     }
     public var anchorFrame: CGRect {
@@ -115,6 +112,14 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             sizeToFit()
             let stubFrame = calculateStubFrame(boundingBox: self.bounds.size)
             return stubFrame
+        }
+    }
+    
+    // generated layout properties
+    var anchorExpandedSize: CGSize {
+        get {
+            return CGSize(width: anchorCompactSize.width + anchorExpandedInset.width * 2,
+                          height: anchorCompactSize.height + anchorExpandedInset.height * 2)
         }
     }
     
@@ -132,12 +137,15 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             }
             let mask = self.maskContainer.layer.mask as! CAShapeLayer
             mask.frame = self.shape.bounds
-            mask.path = self.shape.shape.cgPath
+            
+            let maskShape = self.shape.shape
+            mask.path = maskShape.cgPath
         }
     }
     
-    // view properties
+    // views
     var shape: BezierBackgroundView
+    var debugLayer: UIView?
     var maskContainer: UIView
     var contentsContainer: UIView
     var selectionViewContainer: UIView
@@ -146,6 +154,8 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     
     // hardware stuff
     var selectionFeedback: UISelectionFeedbackGenerator
+    
+    // MARK: Lifecycle
     
     override init(frame: CGRect) {
         self.previousSize = CGSize.zero
@@ -164,6 +174,10 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         
         self.selectionFeedback = UISelectionFeedbackGenerator()
         
+        if DebugDraw {
+            self.debugLayer = UIView()
+        }
+        
         super.init(frame: frame)
         
         //self.backgroundColor = UIColor.yellow.withAlphaComponent(0.25)
@@ -172,6 +186,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         
         viewLayoutSetup: do {
             self.addSubview(shape)
+            if let debugLayer = self.debugLayer { self.addSubview(debugLayer) }
             self.addSubview(maskContainer)
             maskContainer.addSubview(contentsContainer)
             contentsContainer.addSubview(selectionViewContainer)
@@ -307,6 +322,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
                 
                 self.maskContainer.frame = self.bounds
                 self.shape.frame = self.bounds
+                self.debugLayer?.frame = self.bounds
             }
             
             // KLUDGE:
@@ -353,9 +369,9 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         }
         
         // fixed top-level properties
-        let stubFullInsetSize = SelectionPopup.stubFullInsetSize
-        let maximumSlopeBezierRadius = SelectionPopup.maximumSlopeBezierRadius
-        let maximumSlopeAngle = SelectionPopup.maximumSlopeAngle
+        let stubFullInsetSize = anchorExpandedInset
+        let maximumSlopeBezierRadius = maximumAnchorSlopeBezierRadius
+        let maximumSlopeAngle = maximumAnchorSlopeAngle
         let contentsSize = self.contentsContainer.bounds.size
         let t = CGFloat(self.t)
         let side = self.anchorPosition.side
@@ -663,9 +679,6 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             }
         }
         
-        print("estimated left angle to corner: \(tempOverflowAngleL * 360.0 / (2 * CGFloat.pi)) (used: \(slopeLCannotCurve))")
-        print("estimated right angle to corner: \(tempOverflowAngleR * 360.0 / (2 * CGFloat.pi)) (used: \(slopeRCannotCurve))")
-        
         // final gathering point of relevant vertices, so they don't have to be calculated on the fly inside the draw sections
         // start to end is always +x or +y, so clock direction is flipped when stub changes sides
         let contentsPoints: (
@@ -904,12 +917,65 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         
         shape.close()
         
-        //addCircle(shape, c: slopeRStartCurveStart, r: 5)
-        //addCircle(shape, c: slopeRStart, r: 5)
-        //addCircle(shape, c: slopeRStartCurveEnd, r: 5)
-        //addCircle(shape, c: slopeLStartCurveStart, r: 5)
-        //addCircle(shape, c: slopeLStart, r: 5)
-        //addCircle(shape, c: slopeLStartCurveEnd, r: 5)
+        if let debugLayer = self.debugLayer {
+            if let sublayers = debugLayer.layer.sublayers {
+                for sublayer in sublayers {
+                    sublayer.removeFromSuperlayer()
+                }
+            }
+            
+            // bezier control points
+            for (i, point) in [slopeLStartCurveStart, slopeLStart, slopeLStartCurveEnd,
+                               slopeRStartCurveStart, slopeRStart, slopeRStartCurveEnd].enumerated()
+            {
+                if stage != .bloom {
+                    continue
+                }
+                if i < 3 && slopeLCannotCurve {
+                    continue
+                }
+                if i >= 3 && slopeRCannotCurve {
+                    continue
+                }
+                
+                let radius: CGFloat = 2
+                let color = UIColor.white
+                
+                let shape = CAShapeLayer()
+                let bezier = UIBezierPath(roundedRect: CGRect(x: point.x-radius, y: point.y-radius, width: radius*2, height: radius*2), cornerRadius: radius)
+                shape.path = bezier.cgPath
+                shape.fillColor = color.cgColor
+                
+                debugLayer.layer.addSublayer(shape)
+            }
+            
+            // corners
+            for (i, point) in [contentsCorners.stubStart, contentsCorners.nonStubStart, contentsCorners.nonStubEnd, contentsCorners.stubEnd].enumerated() {
+                let radius: CGFloat
+                if i == 0 {
+                    radius = contentsTStubStartCornerRadius
+                }
+                else if i == 3 {
+                    radius = contentsTStubEndCornerRadius
+                }
+                else {
+                    radius = contentsTMaxCornerRadius
+                }
+                
+                let color = UIColor.white
+                let lineWidth: CGFloat = 1
+                
+                let shape = CAShapeLayer()
+                let bezier = UIBezierPath(roundedRect: CGRect(x: point.x-radius, y: point.y-radius, width: radius*2, height: radius*2), cornerRadius: radius)
+                shape.path = bezier.cgPath
+                shape.strokeColor = color.cgColor
+                shape.fillColor = nil
+                shape.lineWidth = lineWidth
+                
+                debugLayer.layer.addSublayer(shape)
+            }
+            
+        }
         
         self.shape.shape = shape
         
@@ -934,10 +1000,10 @@ extension SelectionPopup {
         let vertical = (anchorPosition.side == 0 || anchorPosition.side == 2)
         
         if vertical {
-            return CGSize(width: SelectionPopup.stubFullSize.width, height: SelectionPopup.stubFullSize.height)
+            return CGSize(width: anchorExpandedSize.width, height: anchorExpandedSize.height)
         }
         else {
-            return CGSize(width: SelectionPopup.stubFullSize.height, height: SelectionPopup.stubFullSize.width)
+            return CGSize(width: anchorExpandedSize.height, height: anchorExpandedSize.width)
         }
     }
     
@@ -1007,11 +1073,11 @@ extension SelectionPopup {
             
             // container can't be smaller than maximally expanded stub or title
             if stubVertical {
-                contentsInnerSize.width = max(contentsInnerSize.width, stubSize.width * SelectionPopup.minimumContentsMultiplierAlongStubAxis)
+                contentsInnerSize.width = max(contentsInnerSize.width, stubSize.width * minimumContentsMultiplierAlongAnchorAxis)
                 contentsInnerSize.width = max(contentsInnerSize.width, margin + titleFrame.size.width + margin)
             }
             else {
-                contentsInnerSize.height = max(contentsInnerSize.height, stubSize.height * SelectionPopup.minimumContentsMultiplierAlongStubAxis)
+                contentsInnerSize.height = max(contentsInnerSize.height, stubSize.height * minimumContentsMultiplierAlongAnchorAxis)
             }
             
             contentsContainerFrame.size = CGSize(

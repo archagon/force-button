@@ -11,7 +11,7 @@ import UIKit.UIGestureRecognizerSubclass
 
 // TWO TASKS:
 //  a) pop-up menu on force touch
-//  b) combined notes on adjascent touch
+//  b) combined notes on adjascent touch -- color switching?
 
 class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // AB: There are two types of state to track here. First, there's the value state — on or off. This is stored
@@ -184,9 +184,10 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         return nil
     }
     
-    private let snapOnT: Double = 0.4
-    private let snapOffT: Double = 0.5
-    private let cancellationThreshhold: CGFloat = 16
+    public
+    let snapOnT: Double = 0.4
+    public let snapOffT: Double = 0.5
+    public let cancellationThreshhold: CGFloat = 16
     
     // MARK: Display State
     
@@ -310,8 +311,8 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // MARK: Touch & Gesture Recognition
     
-    private var panGestureRecognizer: SimpleMovementGestureRecognizer!
-    private var deepTouchGestureRecognizer: DeepTouchGestureRecognizer!
+    var panGestureRecognizer: SimpleMovementGestureRecognizer!
+    private(set) var deepTouchGestureRecognizer: SimpleDeepTouchGestureRecognizer! //NEXT: probably shouldn't be accessing this?
     var is3dTouching: Bool {
         get {
             if deepTouchGestureRecognizer.isEnabled {
@@ -358,12 +359,11 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         self.panGestureRecognizer.delegate = self
         self.addGestureRecognizer(self.panGestureRecognizer)
         
-        self.deepTouchGestureRecognizer = DeepTouchGestureRecognizer(target: self, action: #selector(deepTouchEvents(recognizer:)))
+        self.deepTouchGestureRecognizer = SimpleDeepTouchGestureRecognizer(target: self, action: #selector(deepTouchEvents(recognizer:)))
         self.deepTouchGestureRecognizer.delegate = self
         self.addGestureRecognizer(self.deepTouchGestureRecognizer)
         
         self.deepTouchGestureRecognizer.nonForceDefaultValue = self.snapOnT
-        self.deepTouchGestureRecognizer.forceScaleFactor = 1.25
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -398,7 +398,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
             p.y <= -cancellationThreshhold)
     }
     
-    @objc private func tapEvents(recognizer: UIPanGestureRecognizer) {
+    @objc private func tapEvents(recognizer: SimpleMovementGestureRecognizer) {
         switch recognizer.state {
             
         case .began:
@@ -463,7 +463,7 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
 
-    @objc private func deepTouchEvents(recognizer: DeepTouchGestureRecognizer) {
+    @objc private func deepTouchEvents(recognizer: SimpleDeepTouchGestureRecognizer) {
         switch recognizer.state {
         case .began:
             print("deep touch recognition began")
@@ -690,159 +690,13 @@ class ForceButton: UIControl, UIGestureRecognizerDelegate {
 //        
         return true
     }
-
-    // MARK: - Helper Classes -
-    
-    // pan gesture recognizers have a minimum radius, which is unacceptable for our use case
-    class SimpleMovementGestureRecognizer: UIGestureRecognizer {
-        private var firstTouch: UITouch?
-
-        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesBegan(touches, with: event)
-            
-            if self.state == .possible, self.firstTouch == nil, let touch = touches.first {
-                self.firstTouch = touch
-                self.state = .began
-            }
-            
-            if self.firstTouch != nil {
-                for touch in touches {
-                    if touch != self.firstTouch {
-                        self.ignore(touch, for: event)
-                    }
-                }
-            }
-        }
-        
-        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesMoved(touches, with: event)
-            
-            if let touch = self.firstTouch, touches.contains(touch) {
-                self.state = .changed
-            }
-        }
-        
-        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesEnded(touches, with: event)
-            
-            if let touch = self.firstTouch, touches.contains(touch) {
-                self.firstTouch = nil
-                self.state = .ended
-            }
-        }
-        
-        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesCancelled(touches, with: event)
-            
-            if let touch = self.firstTouch, touches.contains(touch) {
-                self.firstTouch = nil
-                self.state = .cancelled
-            }
-        }
-    }
-    
-    // less of a gesture; more of a pressure sensor
-    class DeepTouchGestureRecognizer: UIGestureRecognizer {
-        var minimumForce: Double = ForceButton.StandardTapForce //standard-ish tap
-        var nonForceDefaultValue: Double = 1
-        var forceScaleFactor: Double = 1
-        
-        private(set) var t: Double = 0
-        
-        private var firstTouch: UITouch?
-        
-        private func force(_ touch: UITouch) -> Double {
-            var shouldCheckForce = true
-            
-            if let view = self.view, view.traitCollection.forceTouchCapability != .available {
-                shouldCheckForce = false
-            }
-            
-            if touch.maximumPossibleForce == 0 {
-                shouldCheckForce = false
-            }
-            
-            if shouldCheckForce {
-                return Double(max(min(touch.force / touch.maximumPossibleForce, 1), 0))
-            }
-            else {
-                return self.nonForceDefaultValue
-            }
-        }
-        
-        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesBegan(touches, with: event)
-            
-            if self.state == .possible, self.firstTouch == nil, let touch = touches.first {
-                let t = force(touch)
-                
-                if force(touch) >= self.minimumForce {
-                    self.firstTouch = touch
-                    self.t = t
-                    self.state = .began
-                }
-            }
-            
-            if self.firstTouch != nil {
-                for touch in touches {
-                    if touch != self.firstTouch {
-                        self.ignore(touch, for: event)
-                    }
-                }
-            }
-        }
-        
-        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesMoved(touches, with: event)
-            
-            // BUGFIX: fun fact -- if you don't change your state to .began or .changed, you won't get a touchesCancelled
-            // call on gesture cancellation! this means we can't persist touches until we're past the threshhold
-            if self.state == .possible, self.firstTouch == nil, let touch = touches.first {
-                let t = force(touch)
-                
-                if force(touch) >= self.minimumForce {
-                    self.firstTouch = touch
-                    self.t = t
-                    self.state = .began
-                }
-            }
-            else if let touch = self.firstTouch, touches.contains(touch) {
-                let t = force(touch)
-                
-                self.t = t
-                self.state = .changed
-            }
-        }
-        
-        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesEnded(touches, with: event)
-            
-            if let touch = self.firstTouch, touches.contains(touch) {
-                self.t = 0
-                self.firstTouch = nil
-                
-                self.state = .ended
-            }
-        }
-        
-        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-            super.touchesCancelled(touches, with: event)
-            
-            if let touch = self.firstTouch, touches.contains(touch) {
-                self.t = 0
-                self.firstTouch = nil
-                
-                self.state = .cancelled
-            }
-        }
-    }
 }
 
 // MARK: - Helpers -
 
 // MARK: Extensions
 
-fileprivate extension UIControlState {
+extension UIControlState {
     static func customMask(n: Int) -> UIControlState {
         var applicationMask: UIControlState?
         
@@ -883,15 +737,7 @@ extension UIControlState: Hashable {
     }
 }
 
-fileprivate extension UIGestureRecognizer {
-    func cancel() {
-        let wasEnabled = self.isEnabled
-        self.isEnabled = false
-        self.isEnabled = wasEnabled
-    }
-}
-
-// MARK: Easing Functions
+// MARK: Easing
 
 fileprivate func easeOutCubic(_ t: Double) -> Double {
     return max(min(1 - pow(1 - t, 3), 1), 0)
