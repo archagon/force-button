@@ -702,12 +702,6 @@ extension UIColor {
     }
 }
 
-// MARK: Easing
-
-fileprivate func easeOutExpo(_ t: Double) -> Double {
-    return t == 1 ? 1 : 1 - pow(2, -10 * t)
-}
-
 
 
 

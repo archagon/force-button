@@ -171,6 +171,7 @@ public class SimpleDeepTouchGestureRecognizer: UIGestureRecognizer {
 }
 
 // like the above, but timer-based for use with the simulator
+// TODO: TARGET_IPHONE_SIMULATOR
 public class SimpleFakeDeepTouchGestureRecognizer: UIGestureRecognizer {
     public var minimumForce: Double = 0.18 //standard-ish tap
     public var nonForceDefaultValue: Double = 1 //doesn't actually don anything here

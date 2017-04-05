@@ -15,6 +15,8 @@
 		4E228C311E85A394009F88FA /* SimpleGestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E228C301E85A394009F88FA /* SimpleGestures.swift */; };
 		4E26C0621E806B40002FA204 /* DemoButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E26C0611E806B40002FA204 /* DemoButton.swift */; };
 		4E26C0651E809B66002FA204 /* SelectionPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E26C0641E809B66002FA204 /* SelectionPopup.swift */; };
+		4E5DC3B31E94BFCF00A9977E /* Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5DC3B21E94BFCF00A9977E /* Helpers.swift */; };
+		4E5DC3B51E94C08300A9977E /* Easing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5DC3B41E94C08300A9977E /* Easing.swift */; };
 		4E7685E31DA611E100AD0562 /* ForceButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E7685E21DA611E100AD0562 /* ForceButton.swift */; };
 /* End PBXBuildFile section */
 
@@ -29,6 +31,8 @@
 		4E228C301E85A394009F88FA /* SimpleGestures.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimpleGestures.swift; sourceTree = "<group>"; };
 		4E26C0611E806B40002FA204 /* DemoButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoButton.swift; sourceTree = "<group>"; };
 		4E26C0641E809B66002FA204 /* SelectionPopup.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SelectionPopup.swift; sourceTree = "<group>"; };
+		4E5DC3B21E94BFCF00A9977E /* Helpers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Helpers.swift; sourceTree = "<group>"; };
+		4E5DC3B41E94C08300A9977E /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easing.swift; sourceTree = "<group>"; };
 		4E7685E21DA611E100AD0562 /* ForceButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ForceButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -65,7 +69,10 @@
 				4E7685E21DA611E100AD0562 /* ForceButton.swift */,
 				4E228C301E85A394009F88FA /* SimpleGestures.swift */,
 				4E26C0641E809B66002FA204 /* SelectionPopup.swift */,
+				4E5DC3B21E94BFCF00A9977E /* Helpers.swift */,
+				4E5DC3B41E94C08300A9977E /* Easing.swift */,
 				4E26C0631E806C82002FA204 /* Demo */,
+				4E00FAE51DA5A64F00CD1D73 /* Info.plist */,
 			);
 			path = ForceButton;
 			sourceTree = "<group>";
@@ -79,7 +86,6 @@
 				4E00FADD1DA5A64F00CD1D73 /* Main.storyboard */,
 				4E00FAE01DA5A64F00CD1D73 /* Assets.xcassets */,
 				4E00FAE21DA5A64F00CD1D73 /* LaunchScreen.storyboard */,
-				4E00FAE51DA5A64F00CD1D73 /* Info.plist */,
 			);
 			name = Demo;
 			sourceTree = "<group>";
@@ -158,10 +164,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				4E26C0621E806B40002FA204 /* DemoButton.swift in Sources */,
+				4E5DC3B31E94BFCF00A9977E /* Helpers.swift in Sources */,
 				4E00FADC1DA5A64F00CD1D73 /* ViewController.swift in Sources */,
 				4E7685E31DA611E100AD0562 /* ForceButton.swift in Sources */,
 				4E228C311E85A394009F88FA /* SimpleGestures.swift in Sources */,
 				4E26C0651E809B66002FA204 /* SelectionPopup.swift in Sources */,
+				4E5DC3B51E94C08300A9977E /* Easing.swift in Sources */,
 				4E00FADA1DA5A64F00CD1D73 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

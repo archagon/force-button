@@ -68,50 +68,58 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             self.shape.color = newValue
         }
     }
+    
+    private func relayout() { sizeToFit(); setNeedsLayout(); }
 
     // layout properties
     public var itemHeight: CGFloat = 44 { //AB: assuming that width is reasonably close to height
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var itemSelectorMargin: CGFloat = 8 {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var itemMargin: CGFloat = 4 {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var maxItemsPerRow: Int = 4 {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var contentInset: UIEdgeInsets = UIEdgeInsets.zero {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     
     // nitty-gritty layout properties
     public var maximumAnchorSlopeAngle: CGFloat = 20 {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var maximumAnchorSlopeBezierRadius: CGFloat = 32 {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var minimumContentsMultiplierAlongAnchorAxis: CGFloat = 1.2 {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     
     // anchor properties
     public var anchorCompactSize: CGSize = CGSize(width: 62.5 - 3, height: 60) {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var anchorExpandedInset: CGSize = CGSize(width: 16, height: 16) {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var anchorPosition: (side: Int, position: CGFloat) = (2, 0.5) { //t,l,b,r -- +x,+y axis aligned (CG coords)
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var anchorFrame: CGRect {
         get {
             sizeToFit()
             let stubFrame = calculateStubFrame(boundingBox: self.bounds.size)
             return stubFrame
+        }
+    }
+    public var contentsFrame: CGRect {
+        get {
+            sizeToFit()
+            return self.contentsContainer.frame
         }
     }
     
@@ -123,7 +131,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         }
     }
     
-    // procedural properties
+    // procedural properties -- 0 to 0.5 is expand, while 0.5 to 1 is popup
     public var t: Double = 0 {
         didSet {
             let stubFrame = calculateStubFrame(boundingBox: self.bounds.size)
@@ -265,6 +273,16 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         }
     }
     
+    public func cancel() {
+        guard let gestures = self.gestureRecognizers else {
+            return
+        }
+        
+        for gesture in gestures {
+            gesture.cancel()
+        }
+    }
+    
     func tappedItem(button: UIButton) {
         self.selectedItem = button.tag
     }
@@ -286,7 +304,10 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         
-        if previousSize == nil || self.bounds.size != previousSize! {
+        //if previousSize == nil || self.bounds.size != previousSize! {
+        if true {
+            print("laying out subviews")
+        
             // KLUDGE:
             let selectionViewContainerTransform = self.selectionViewContainer.transform
             let titleTransform = self.title.transform
@@ -354,9 +375,6 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         func fmodpos(a: CGFloat, b: CGFloat) -> CGFloat {
             return a - b * floor(a / b)
         }
-        func easeOutCubic(_ t: CGFloat) -> CGFloat {
-            return max(min(1 - pow(1 - t, 3), 1), 0)
-        }
         func circlePoint(c: CGPoint, r: CGFloat, a: CGFloat, clockwise: Bool) -> CGPoint {
             return CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(clockwise ? a : -a))
         }
@@ -378,9 +396,9 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         let clockwise = (side == 2 || side == 3)
         
         // fixed t ranges
-        let stubExpandTRange: ClosedRange<CGFloat> = CGFloat(0.0)...CGFloat(0.7)
+        let stubExpandTRange: ClosedRange<CGFloat> = CGFloat(0.0)...CGFloat(0.5)
         let stubRemoveTopCornersTRange: ClosedRange<CGFloat> = CGFloat(stubExpandTRange.upperBound)...CGFloat(stubExpandTRange.upperBound + 0.05)
-        let stubSlopeTRange: ClosedRange<CGFloat> = CGFloat(stubRemoveTopCornersTRange.upperBound)...CGFloat(stubRemoveTopCornersTRange.upperBound + 0.15)
+        let stubSlopeTRange: ClosedRange<CGFloat> = CGFloat(stubRemoveTopCornersTRange.upperBound)...CGFloat(1)
         let contentsExpandTRange: ClosedRange<CGFloat> = CGFloat(stubSlopeTRange.lowerBound)...CGFloat(stubSlopeTRange.upperBound)
         
         #if DEBUG
@@ -399,7 +417,6 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         
         // calculated t
         var stubExpandedT = min(max((t - stubExpandTRange.lowerBound) / (stubExpandTRange.upperBound - stubExpandTRange.lowerBound), 0), 1)
-        stubExpandedT = easeOutCubic(stubExpandedT)
         let stubRemoveTopCornersT = min(max((t - stubRemoveTopCornersTRange.lowerBound) / (stubRemoveTopCornersTRange.upperBound - stubRemoveTopCornersTRange.lowerBound), 0), 1)
         let stubSlopeT = min(max((t - stubSlopeTRange.lowerBound) / (stubSlopeTRange.upperBound - stubSlopeTRange.lowerBound), 0), 1)
         let contentsExpandT = min(max((t - contentsExpandTRange.lowerBound) / (contentsExpandTRange.upperBound - contentsExpandTRange.lowerBound), 0), 1)
@@ -514,8 +531,6 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
                 let slopeRWidth = slopeRHeight * tan(slopeAngleR)
                 slopeLStart = CGPoint(x: slopeLEnd.x - slopeLWidth, y: slopeLEnd.y + slopeLHeight)
                 slopeRStart = CGPoint(x: slopeREnd.x + slopeRWidth, y: slopeREnd.y + slopeRHeight)
-                
-                print("slope R: \(slopeRWidth), \(slopeRHeight), \(slopeAngleR * (360 / (2 * CGFloat.pi)))")
             }
             else {
                 let slopeLHeight = slopeLEnd.y - stubTFrame.minY
@@ -993,7 +1008,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     }
 }
 
-// layout
+// layout: these should not access view data and instead operate purely mathematically (though we make an exception for the title field)
 extension SelectionPopup {
     // expanded stub size
     func calculateStubSize() -> CGSize {
@@ -1043,9 +1058,7 @@ extension SelectionPopup {
     
     func calculateFrames() -> (boundingBox: CGSize, stub: CGRect, contentsContainer: CGRect, title: CGRect, selectionContainer: CGRect) {
         // KLUDGE:
-        let selectionViewContainerTransform = self.selectionViewContainer.transform
         let titleTransform = self.title.transform
-        self.selectionViewContainer.transform = CGAffineTransform.identity
         self.title.transform = CGAffineTransform.identity
         
         var boundingBox: CGSize
@@ -1110,7 +1123,6 @@ extension SelectionPopup {
         }
         
         // KLUDGE:
-        self.selectionViewContainer.transform = selectionViewContainerTransform
         self.title.transform = titleTransform
         
         return (boundingBox, stubFrame, contentsContainerFrame, titleFrame, selectionContainerFrame)
