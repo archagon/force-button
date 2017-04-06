@@ -6,10 +6,10 @@ fileprivate let DebugDraw = false
 
 // TODO: 2x horizontal
 
-protocol SelectionPopupDelegate {
+public protocol SelectionPopupDelegate {
 }
 
-class SelectionPopup: UIView, UIGestureRecognizerDelegate {
+public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     // MARK: Properties
     
     // general properties
@@ -130,6 +130,11 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
                           height: anchorCompactSize.height + anchorExpandedInset.height * 2)
         }
     }
+    public var currentShape: UIBezierPath {
+        get {
+            return self.shape.shape
+        }
+    }
     
     // procedural properties -- 0 to 0.5 is expand, while 0.5 to 1 is popup
     public var t: Double = 0 {
@@ -165,7 +170,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     
     // MARK: Lifecycle
     
-    override init(frame: CGRect) {
+    override public init(frame: CGRect) {
         self.previousSize = CGSize.zero
         
         let shape = BezierBackgroundView(frame: UIArbitraryStartingFrame)
@@ -208,7 +213,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         }
     }
     
-    required init?(coder aDecoder: NSCoder) {
+    required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
@@ -272,19 +277,19 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     
     // MARK: Gestures
     
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         return true
     }
     
     // MARK: Layout
     
-    override func setNeedsLayout() {
+    override public func setNeedsLayout() {
         previousSize = nil
         
         super.setNeedsLayout()
     }
     
-    override func layoutSubviews() {
+    override public func layoutSubviews() {
         super.layoutSubviews()
         
         //if previousSize == nil || self.bounds.size != previousSize! {
@@ -340,7 +345,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     }
     var previousSize: CGSize?
     
-    override func sizeThatFits(_ size: CGSize) -> CGSize {
+    override public func sizeThatFits(_ size: CGSize) -> CGSize {
         let layout = calculateFrames()
         
         return CGSize(width: layout.boundingBox.width, height: layout.boundingBox.height)

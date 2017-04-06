@@ -8,11 +8,13 @@
 
 import UIKit
 import AudioToolbox
+import ForceButtonFramework
 
 // NEXT:
 //  * fix force button
 //  * long press
 //  * re-enable scrolling
+//  * second touch next to held-open popup causes glitches
 
 // NEXT:
 //  * show under button & match color
@@ -276,7 +278,7 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         if view == nil {
             if let popup = self.popup {
                 let popupPoint = self.convert(point, to: popup)
-                let popupShape = popup.shape.shape
+                let popupShape = popup.currentShape
                 
                 if popupShape.contains(popupPoint) {
                     return popup
