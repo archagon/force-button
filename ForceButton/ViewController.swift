@@ -10,15 +10,13 @@ import UIKit
 import AudioToolbox
 
 // NEXT:
-//  * graphical glitches
-//  * animation state, so that can start/end correctly
-//  * on/off state bugs
-//  * show under button & match color
-//  * close popup if tapped outside
-//  * hook up to gesture recognizers
 //  * fix force button
 //  * long press
 //  * re-enable scrolling
+
+// NEXT:
+//  * show under button & match color
+//  * adjust curves
 
 protocol CellDelegate: class {
     func cellShouldBeBroughtToFront(cell: DemoPopupCell)
@@ -228,6 +226,7 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     
     // gestures
     private var popupGesture: SimpleDeepTouchGestureRecognizer
+    private var popupSelectionGesture: SimpleMovementGestureRecognizer
     
     // popup state
     private var popupOpenAnimation: Animation?
@@ -241,13 +240,17 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         let button = DemoButton()
         self.button = button
         self.popupGesture = SimpleDeepTouchGestureRecognizer()
+        self.popupSelectionGesture = SimpleMovementGestureRecognizer()
         self.feedback = UIImpactFeedbackGenerator(style: .heavy)
         
         super.init(frame: frame)
         
         self.popupGesture.addTarget(self, action: #selector(popupDeepTouch))
+        self.popupSelectionGesture.addTarget(self, action: #selector(popupMovement))
         self.popupGesture.delegate = self
+        self.popupSelectionGesture.delegate = self
         self.addGestureRecognizer(self.popupGesture)
+        self.addGestureRecognizer(self.popupSelectionGesture)
         
         self.contentView.addSubview(button)
         
@@ -273,8 +276,14 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         if view == nil {
             if let popup = self.popup {
                 let popupPoint = self.convert(point, to: popup)
-                if popup.point(inside: popupPoint, with: event) {
+                let popupShape = popup.shape.shape
+                
+                if popupShape.contains(popupPoint) {
                     return popup
+                }
+                else {
+                    closePopup()
+                    return UIView() //KLUDGE: ensures that touches don't do anything
                 }
             }
         }
@@ -283,19 +292,44 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     }
     
     func buttonOn(_ button: DemoButton) {
+        closePopup()
     }
     
     func popupDeepTouch(gesture: SimpleDeepTouchGestureRecognizer) {
         self.delegate?.cellShouldBeBroughtToFront(cell: self)
-        self.button.cancelTouches()
         
         let gestureOver = !(gesture.state == .began || gesture.state == .changed)
+        
+        if self.popupState == .open || self.popupState == .opening {
+            return
+        }
+        
+        self.button.cancelTouches()
         
         if gestureOver  {
             closePopup()
         }
         else {
             openPopup(t: gesture.t)
+        }
+    }
+    
+    func popupMovement(gesture: SimpleMovementGestureRecognizer) {
+        self.delegate?.cellShouldBeBroughtToFront(cell: self)
+        
+        let gestureOver = !(gesture.state == .began || gesture.state == .changed)
+        
+        if self.popupState != .open {
+            return
+        }
+        
+        if gestureOver {
+            if self.popup?.selectedItem != nil {
+                closePopup()
+            }
+        }
+        else {
+            self.popup?.changeSelection(gesture.location(in: nil))
         }
     }
     

@@ -137,7 +137,7 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             let stubFrame = calculateStubFrame(boundingBox: self.bounds.size)
             generateShape(stubFrame: stubFrame)
             
-            self.gestureRecognizers!.first!.isEnabled = (t == 1)
+            //self.gestureRecognizers!.first!.isEnabled = (t == 1)
             
             if self.maskContainer.layer.mask == nil {
                 let mask = CAShapeLayer()
@@ -206,11 +206,6 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             title.textColor = UIColor.white
             title.textAlignment = .center
         }
-        
-        let gesture = SimpleMovementGestureRecognizerTwo()
-        gesture.addTarget(self, action: #selector(gestureRecognizerAction))
-        gesture.delegate = self
-        self.addGestureRecognizer(gesture)
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -240,7 +235,9 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         sizeToFit()
     }
     
-    public func gestureRecognizerAction(gestureRecognizer: UIGestureRecognizer) {
+    public func changeSelection(_ withWorldPosition: CGPoint) {
+        let touch = self.convert(withWorldPosition, from: nil)
+        
         // TODO: for now, finds matching item
         func findClosestItem(position: CGPoint) -> Int? {
             for (i, item) in self.selectionViews.enumerated() {
@@ -253,24 +250,10 @@ class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             return nil
         }
         
-        let touch = gestureRecognizer.location(in: self)
         let item = findClosestItem(position: touch)
         
         self.selectionFeedback.prepare()
         self.selectedItem = item
-        
-        switch gestureRecognizer.state {
-        case .began:
-            print("began: \(item)")
-        case .changed:
-            print("changed: \(item)")
-        case .ended:
-            print("ended: \(item)")
-        case .cancelled:
-            print("cancelled: \(item)")
-        default:
-            break
-        }
     }
     
     public func cancel() {
@@ -1278,52 +1261,5 @@ class BezierBackgroundView: UIView {
     
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-}
-
-class SimpleMovementGestureRecognizerTwo: UIGestureRecognizer {
-    private var firstTouch: UITouch?
-    
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesBegan(touches, with: event)
-        
-        if self.state == .possible, self.firstTouch == nil, let touch = touches.first {
-            self.firstTouch = touch
-            self.state = .began
-        }
-        
-        if self.firstTouch != nil {
-            for touch in touches {
-                if touch != self.firstTouch {
-                    self.ignore(touch, for: event)
-                }
-            }
-        }
-    }
-    
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesMoved(touches, with: event)
-        
-        if let touch = self.firstTouch, touches.contains(touch) {
-            self.state = .changed
-        }
-    }
-    
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesEnded(touches, with: event)
-        
-        if let touch = self.firstTouch, touches.contains(touch) {
-            self.firstTouch = nil
-            self.state = .ended
-        }
-    }
-    
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesCancelled(touches, with: event)
-        
-        if let touch = self.firstTouch, touches.contains(touch) {
-            self.firstTouch = nil
-            self.state = .cancelled
-        }
     }
 }
