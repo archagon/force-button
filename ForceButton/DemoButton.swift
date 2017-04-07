@@ -250,11 +250,6 @@ class DemoButton: ForceButton {
                 }
             }
         }
-        
-//        let gesture = SimpleMovementGestureRecognizerThree()
-//        gesture.delegate = self
-//        self.addGestureRecognizer(gesture)
-//        self.gesture = gesture
     }
     
     required init?(coder aDecoder: NSCoder) {

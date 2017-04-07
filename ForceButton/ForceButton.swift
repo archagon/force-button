@@ -29,6 +29,13 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
     
+    public var supportsPressure: Bool = true {
+        didSet {
+            cancelTouches()
+            traitCollectionDidChange(self.traitCollection)
+        }
+    }
+    
     public var tBlock: ((_ t: Double, _ threshhold: Double, _ bounds: CGRect, _ state: UIControlState, _ value: Bool)->())?
     public var renderBlock: ((_ t: Double, _ threshhold: Double, _ rect: CGRect, _ bounds: CGRect, _ state: UIControlState, _ value: Bool)->())? {
         didSet {
@@ -371,7 +378,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             self.deepTouchGestureRecognizer.isEnabled = false
         }
         else if self.traitCollection.forceTouchCapability == .available {
-            self.deepTouchGestureRecognizer.isEnabled = true
+            self.deepTouchGestureRecognizer.isEnabled = self.supportsPressure
         }
         // and do nothing on 'unknown'
     }

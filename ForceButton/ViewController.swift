@@ -11,8 +11,8 @@ import AudioToolbox
 import ForceButtonFramework
 
 // NEXT:
-//  * fix force button
-//  * long press
+//  * clean up force button w/gesture code
+//  * clean up framework for public etc
 //  * re-enable scrolling
 //  * second touch next to held-open popup causes glitches
 
@@ -212,6 +212,12 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
 
 // a collection view cell featuring a custom-drawn button and a 3d touch popup
 class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
+    enum CellType {
+        case popup
+        case longPress
+        case pressure
+    }
+    
     enum PopupState {
         case closed
         case pushing
@@ -221,6 +227,7 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     }
     
     weak var delegate: CellDelegate?
+    private var cellType: CellType
     
     // views
     private(set) var button: DemoButton
@@ -229,6 +236,7 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     // gestures
     private var popupGesture: SimpleDeepTouchGestureRecognizer
     private var popupSelectionGesture: SimpleMovementGestureRecognizer
+    private var popupLongHoldGesture: UILongPressGestureRecognizer
     
     // popup state
     private var popupOpenAnimation: Animation?
@@ -239,20 +247,27 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var feedback: UIImpactFeedbackGenerator
     
     override init(frame: CGRect) {
+        let rand = arc4random_uniform(3)
+        self.cellType = (rand == 0 ? .popup : (rand == 1 ? .longPress : .pressure))
+        
         let button = DemoButton()
         self.button = button
         self.popupGesture = SimpleDeepTouchGestureRecognizer()
         self.popupSelectionGesture = SimpleMovementGestureRecognizer()
+        self.popupLongHoldGesture = UILongPressGestureRecognizer()
         self.feedback = UIImpactFeedbackGenerator(style: .heavy)
         
         super.init(frame: frame)
         
         self.popupGesture.addTarget(self, action: #selector(popupDeepTouch))
         self.popupSelectionGesture.addTarget(self, action: #selector(popupMovement))
+        self.popupLongHoldGesture.addTarget(self, action: #selector(popupLongPress))
         self.popupGesture.delegate = self
         self.popupSelectionGesture.delegate = self
+        self.popupLongHoldGesture.delegate = self
         self.addGestureRecognizer(self.popupGesture)
         self.addGestureRecognizer(self.popupSelectionGesture)
+        self.addGestureRecognizer(self.popupLongHoldGesture)
         
         self.contentView.addSubview(button)
         
@@ -263,9 +278,13 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         button.rightAnchor.constraint(equalTo: self.rightAnchor).isActive = true
         
         buttonSetup: do {
-            button.setColor(UIColor.blue.lightenByAmount(0.5))
+            button.setColor((cellType == .popup ? UIColor.blue : (cellType == .longPress ? UIColor.green : UIColor.red)).lightenByAmount(0.5))
             button.addTarget(self, action: #selector(buttonOn), for: .valueChanged)
+            button.supportsPressure = (cellType == .pressure)
         }
+        
+        self.popupLongHoldGesture.isEnabled = (cellType == .longPress)
+        self.popupGesture.isEnabled = (cellType == .popup)
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -333,6 +352,18 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         else {
             self.popup?.changeSelection(gesture.location(in: nil))
         }
+    }
+    
+    func popupLongPress(gesture: UILongPressGestureRecognizer) {
+        if !(gesture.state == .began || gesture.state == .recognized) {
+            return
+        }
+        
+        self.delegate?.cellShouldBeBroughtToFront(cell: self)
+        
+        self.button.cancelTouches()
+        
+        openPopup()
     }
     
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
