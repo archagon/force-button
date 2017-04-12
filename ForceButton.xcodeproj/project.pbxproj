@@ -13,6 +13,7 @@
 		4E00FAE11DA5A64F00CD1D73 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4E00FAE01DA5A64F00CD1D73 /* Assets.xcassets */; };
 		4E00FAE41DA5A64F00CD1D73 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4E00FAE21DA5A64F00CD1D73 /* LaunchScreen.storyboard */; };
 		4E26C0621E806B40002FA204 /* DemoButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E26C0611E806B40002FA204 /* DemoButton.swift */; };
+		4E91C1FF1E9C6EB600E1DDD9 /* DemoCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E91C1FE1E9C6EB600E1DDD9 /* DemoCell.swift */; };
 		4EB5C12C1E95C39D0046DE93 /* ForceButtonFramework.h in Headers */ = {isa = PBXBuildFile; fileRef = 4EB5C12A1E95C39D0046DE93 /* ForceButtonFramework.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		4EB5C12F1E95C39D0046DE93 /* ForceButtonFramework.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4EB5C1281E95C39D0046DE93 /* ForceButtonFramework.framework */; };
 		4EB5C1301E95C39D0046DE93 /* ForceButtonFramework.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4EB5C1281E95C39D0046DE93 /* ForceButtonFramework.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -62,6 +63,7 @@
 		4E5DC3B21E94BFCF00A9977E /* Helpers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Helpers.swift; path = ../ForceButton/Helpers.swift; sourceTree = "<group>"; };
 		4E5DC3B41E94C08300A9977E /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Easing.swift; path = ../ForceButton/Easing.swift; sourceTree = "<group>"; };
 		4E7685E21DA611E100AD0562 /* ForceButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ForceButton.swift; path = ../ForceButton/ForceButton.swift; sourceTree = "<group>"; };
+		4E91C1FE1E9C6EB600E1DDD9 /* DemoCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoCell.swift; sourceTree = "<group>"; };
 		4EB5C1281E95C39D0046DE93 /* ForceButtonFramework.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ForceButtonFramework.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EB5C12A1E95C39D0046DE93 /* ForceButtonFramework.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ForceButtonFramework.h; sourceTree = "<group>"; };
 		4EB5C12B1E95C39D0046DE93 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -110,6 +112,7 @@
 			children = (
 				4E00FAD91DA5A64F00CD1D73 /* AppDelegate.swift */,
 				4E00FADB1DA5A64F00CD1D73 /* ViewController.swift */,
+				4E91C1FE1E9C6EB600E1DDD9 /* DemoCell.swift */,
 				4E26C0611E806B40002FA204 /* DemoButton.swift */,
 				4E00FAE01DA5A64F00CD1D73 /* Assets.xcassets */,
 				4E00FADD1DA5A64F00CD1D73 /* Main.storyboard */,
@@ -253,6 +256,7 @@
 			files = (
 				4E26C0621E806B40002FA204 /* DemoButton.swift in Sources */,
 				4E00FADC1DA5A64F00CD1D73 /* ViewController.swift in Sources */,
+				4E91C1FF1E9C6EB600E1DDD9 /* DemoCell.swift in Sources */,
 				4E00FADA1DA5A64F00CD1D73 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -497,6 +501,7 @@
 				4EB5C1321E95C39D0046DE93 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

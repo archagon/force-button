@@ -1,28 +1,17 @@
 import UIKit
 import ForceButtonFramework
 
-// TODO:
-let BubbleNoteHeight: CGFloat = 40
-let BubbleNoteGap: CGFloat = 2
-
+// AB: subclass abilities (isEmphasized, gradient) not really demonstrated in demo project — more for my own personal use
 class DemoButton: ForceButton {
-    // AB: for back-and-forth design testing, not runtime use
+    // MARK: Constants and Stuff
+    
     struct BubbleCellAppearanceAttribute: OptionSet {
         let rawValue: Int
-        
-        static let underlay         = BubbleCellAppearanceAttribute(rawValue: 1 << 0)
         static let darkerBottom     = BubbleCellAppearanceAttribute(rawValue: 1 << 1)
-        static let radialShadow     = BubbleCellAppearanceAttribute(rawValue: 1 << 2)
         static let cornerShadow     = BubbleCellAppearanceAttribute(rawValue: 1 << 3)
-        static let topShadow        = BubbleCellAppearanceAttribute(rawValue: 1 << 4)
-        static let bottomShadow     = BubbleCellAppearanceAttribute(rawValue: 1 << 5)
-        static let leftShadow       = BubbleCellAppearanceAttribute(rawValue: 1 << 6)
-        static let rightShadow      = BubbleCellAppearanceAttribute(rawValue: 1 << 7)
     }
     
-    ////////////////
-    // New States //
-    ////////////////
+    // MARK: New States (Currently Unused in Demo)
     
     var isEmphasized: Bool = false {
         didSet {
@@ -68,9 +57,7 @@ class DemoButton: ForceButton {
         }
     }
     
-    //////////////
-    // Gradient //
-    //////////////
+    // MARK: Gradient (Currently Unused in Demo)
     
     var showGradient: Bool = false {
         didSet {
@@ -100,33 +87,27 @@ class DemoButton: ForceButton {
         }
     }
     
-    ////////////
-    // Colors //
-    ////////////
+    // MARK: Colors
     
     private(set) var lightColor: UIColor = .white
     private(set) var darkColor: UIColor = .gray
     
-    ///////////////
-    // Lifecycle //
-    ///////////////
+    // MARK: Lifecycle
     
     deinit {
-        //DebuggingDeregisterBubbleButton()
+        DebugCounter.counter.decrement(DemoButton.DebugDemoButtonsIdentifier, shouldLog: true)
     }
     
     required init() {
+        DebugCounter.counter.increment(DemoButton.DebugDemoButtonsIdentifier, shouldLog: true)
+        
         super.init(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         
-        //DebuggingRegisterBubbleButton()
-        
         self.tBlock = { [weak self] (t: Double, threshhold: Double, bounds: CGRect, state: UIControlState, value: Bool) in
-            
             guard let weakSelf = self else {
                 return
             }
             
-            // TODO: gradient animation
             if weakSelf.isEmphasized {
                 if weakSelf.isSelected {
                     weakSelf.gradientHighlightAmount = 0
@@ -154,35 +135,14 @@ class DemoButton: ForceButton {
                 return
             }
             
-            //DebuggingRegisterDraw()
-            
             if statePastThreshhold == nil || statePastThreshhold?.0 != state {
                 statePastThreshhold = (state, false)
             }
             
-            // AB: design testing
-            //let ab = Int(Double(button.hash) / 100) % 8 == 0
-            let ab = false
-            let appearanceOptions: BubbleCellAppearanceAttribute = [ .cornerShadow, .darkerBottom ]
-            
-            //let cornerRadius = weakSelf.buttonVisualParameters().cornerRadius
-            
             // color appearance constants
-            var shade: CGFloat = 0.25
-            
-            if ab && appearanceOptions.contains(.underlay) {
-                //gapSize = 3
-                //let bgColor = UIColor.black.withAlphaComponent(0.5)
-                //bgColor.setFill()
-                //UIBezierPath(roundedRect: bounds, cornerRadius: 5).fill()
-            }
-            
-            if ab && appearanceOptions.contains(.darkerBottom) {
-                shade = 0.3
-            }
+            let shade: CGFloat = 0.25
             
             let downT = weakSelf.buttonTParameters(t: t, threshhold: threshhold).downT
-            //let upperInset = weakSelf.buttonTParameters(t: t, threshhold: threshhold).upperInset
             let lowerPath = weakSelf.pathForButtonBottom(t: t, threshhold: threshhold)
             let upperPath = weakSelf.pathForButtonTop(t: t, threshhold: threshhold)
             
@@ -199,7 +159,6 @@ class DemoButton: ForceButton {
             weakSelf.lightColor.getHue(&hl, saturation: &sl, brightness: &bl, alpha: nil)
             weakSelf.darkColor.getHue(&hd, saturation: &sd, brightness: &bd, alpha: nil)
             
-            //let s = (state.isOn ? 1 : CGFloat(0.3 + downT * 0.7))
             let innerColor: UIColor
             if button.isEmphasized && button.isSelected {
                 innerColor = UIColor.white
@@ -214,24 +173,12 @@ class DemoButton: ForceButton {
             }
             
             let outsideDarkColor = innerColor.darkenByAmount(shade)
-            //let insideDarkColor = UIColor.black
-            
-            //let fadeAmount: CGFloat = 0.5
-            //innerColor = innerColor.lightenByAmount(fadeAmount * weakSelf.fadeT)
-            //outsideDarkColor = outsideDarkColor.lightenByAmount(fadeAmount * weakSelf.fadeT)
-            //insideDarkColor = insideDarkColor.lightenByAmount(fadeAmount * weakSelf.fadeT)
-            
-            let clip = lowerPath
             
             // first clip: outer button
+            let clip = lowerPath
             clip.addClip()
             
-            //            if upperInset > 0 {
-            //                insideDarkColor.setFill()
-            //            }
-            //            else {
             outsideDarkColor.setFill()
-            //            }
             lowerPath.fill()
             
             innerColor.setFill()
@@ -272,9 +219,7 @@ class DemoButton: ForceButton {
         self.t = t
     }
     
-    /////////////
-    // Updates //
-    /////////////
+    // MARK: Updates
     
     func setColor(_ color: UIColor) {
         if !self.lightColor.isEqual(color) {
@@ -300,16 +245,14 @@ class DemoButton: ForceButton {
         }
     }
     
-    ////////////////
-    // Appearance //
-    ////////////////
+    // MARK: Appearance
     
     private func buttonVisualParameters() -> (scale: CGFloat, cornerRadius: CGFloat, upInset: CGFloat, downInset: CGFloat, widthCompression: CGFloat) {
-        let noteSize = BubbleNoteHeight
-        let gapSize: CGFloat = BubbleNoteGap
-        let cornerRadius: CGFloat = 4
-        let upInset: CGFloat = 3
-        let downInset: CGFloat = 2
+        let noteSize: CGFloat = 40
+        let gapSize: CGFloat = 3
+        let cornerRadius: CGFloat = 8
+        let upInset: CGFloat = 5
+        let downInset: CGFloat = 3
         let widthCompression: CGFloat = 0.92
         
         let noteRatio = noteSize / (noteSize + gapSize)
@@ -332,6 +275,7 @@ class DemoButton: ForceButton {
         
         let lowerInset = max(upInset - (adjustedT * totalInset), 0)
         let upperInset = max(-upInset + (adjustedT * totalInset), 0)
+        
         let adjustedWidth = widthCompression + (1 - min(max((upperInset/downInset), 0), 1)) * (1 - widthCompression)
         
         let downT = CGFloat(min(max(upperInset, 0)/downInset, 1))
@@ -375,9 +319,7 @@ class DemoButton: ForceButton {
         return lowerPath
     }
     
-    ///////////////
-    // Debugging //
-    ///////////////
+    // MARK: Debugging
     
     func debugStateBits(state: UIControlState) -> String {
         var string = ""
@@ -395,25 +337,11 @@ class DemoButton: ForceButton {
         return "["+string+"]"
     }
     
-    ////////////////////
-    // Gradient Cache //
-    ////////////////////
+    // MARK: Gradient Cache
     
     // TODO: PERF: clear cache on change of conversation
     static var gradient: ((_ color: UIColor, _ size: CGSize)->UIImage) = {
         var gradientCache: [UInt64:UIImage] = [:]
-        
-        //let innerClipGap: CGFloat = 0
-        //var innerClip = UIBezierPath(roundedRect:
-        //    CGRect(0 + innerClipGap,
-        //           0 + innerClipGap,
-        //           button.bounds.size.width - innerClipGap * 2,
-        //           button.bounds.size.height - 3 - innerClipGap * 2),
-        //                             cornerRadius: cornerRadius)
-        //
-        //// second clip: inner button
-        //innerClip.addClip()
-        ////upperPath.addClip()
         
         func _gradient(forColor color: UIColor, size: CGSize) -> UIImage {
             let colorHash: UInt64
@@ -447,9 +375,6 @@ class DemoButton: ForceButton {
                     assert(false, "could not get image context")
                     return UIImage()
                 }
-                
-                //let color = UIColor(hue: RandomFloat() * 360.0, saturation: 100, lightness: 90, alpha: 0.5)
-                //let color = innerColor
                 
                 func generateGradient(_ a: CGFloat, color: UIColor=UIColor.black, function: ((Double)->Double)?=nil, endT: CGFloat?=0.75) -> CGGradient? {
                     var gradientLocations: [CGFloat] = []
@@ -489,18 +414,7 @@ class DemoButton: ForceButton {
                     return CGGradient(colorSpace: colorSpace, colorComponents: &gradientColors, locations: &gradientLocations, count: gradientLocations.count)
                 }
                 
-                //case normal
-                //case softLight
-                //case hardLight
-                //
-                //case multiply
-                //case darken
-                //case lighten -- when depressed?
-                
                 do {
-                    //let gradTop = CGPoint(bounds.size.width / 2, bounds.size.height - bounds.size.height * t)
-                    //let gradBottom = CGPoint(bounds.size.width / 2, bounds.size.height)
-                    
                     var gradLeftL = CGPoint(x: 0, y: size.height / 2)
                     var gradLeftR = CGPoint(x: size.width, y: size.height / 2)
                     var gradRightR = CGPoint(x: size.width, y: gradLeftL.y)
@@ -520,18 +434,10 @@ class DemoButton: ForceButton {
                     let gradCornerBottom = CGPoint(x: CGFloat(sqrt(pow(size.height, 2) / 2.0)),
                                                    y: CGFloat(sqrt(pow(size.height, 2) / 2.0)))
                     
-                    //let stretchFactor: CGFloat = 1.25
-                    //ctx.scaleBy(x: 1, y: stretchFactor)
-                    
-                    //var gradTop = CGPoint(bounds.size.width / 2, bounds.size.height * t)
-                    //var gradBottom = CGPoint(bounds.size.width / 2, 0)
-                    
                     ctx.setBlendMode(.normal)
                     
-                    //let r = (gradTop.y - gradBottom.y)
                     var r = size.width / 2.0
                     r *= 2
-                    //gradBottom.y -= 5
                     
                     let offset: CGFloat = 0
                     
@@ -545,61 +451,11 @@ class DemoButton: ForceButton {
                     gradRightL.x += offset
                     gradRightR.x += offset
                     
-                    if appearanceOptions.contains(.radialShadow) {
-                        //let xOffset: CGFloat = 8
-                        //let yOffset: CGFloat = 4
-                        //
-                        //weakSelf.lightColor.darkenByAmount(0.75 * 0.5).setFill()
-                        //upperPath.fill()
-                        //
-                        //var corner = CGPoint(bounds.size.width - xOffset, bounds.size.height - yOffset)
-                        ////corner = CGPoint(0, 0)
-                        //var radius = bounds.size.width * 1.2
-                        ////corner.x = (bounds.size.width / 2.0)
-                        ////corner = CGPoint(bounds.size.width / 2.0, bounds.size.height / 2.0)
-                        //
-                        //if let gradient = generateGradient(1, color: weakSelf.lightColor, function: easeInQuart) {
-                        //    ctx.drawRadialGradient(gradient, startCenter: corner, startRadius: 0, endCenter: corner, endRadius: radius, options: CGGradientDrawingOptions.drawsAfterEndLocation)
-                        //}
-                    }
-                    
                     if appearanceOptions.contains(.cornerShadow) {
                         if let gradient = generateGradient(1, color: color, function: nil) {
                             ctx.drawLinearGradient(gradient, start: gradCornerTop, end: gradCornerBottom, options: [.drawsAfterEndLocation, .drawsBeforeStartLocation])
                         }
                     }
-                    
-                    let topBottom = appearanceOptions.contains(.topShadow) && appearanceOptions.contains(.bottomShadow)
-                    
-                    if appearanceOptions.contains(.topShadow) {
-                        if let gradient = generateGradient((topBottom ? 0.15 : 0.25), function: easeOutExpo) {
-                            ctx.drawLinearGradient(gradient, start: gradTop, end: gradBottom, options: [.drawsAfterEndLocation, .drawsBeforeStartLocation])
-                        }
-                    }
-                    
-                    if appearanceOptions.contains(.bottomShadow) {
-                        
-                        //                        let newColor = UIColor(hue: weakSelf.lightColor.hslHue, saturation: weakSelf.lightColor.hslSaturation+0, lightness: weakSelf.lightColor.hslLightness-10, alpha: 1)
-                        let newColor = UIColor.black
-                        
-                        if let gradient = generateGradient((topBottom ? 0.15 : 0.15), color: newColor, function: (topBottom ? easeOutExpo : nil), endT: 0.7) {
-                            ctx.drawLinearGradient(gradient, start: gradBTBottom, end: gradBTTop, options: [.drawsAfterEndLocation, .drawsBeforeStartLocation])
-                        }
-                    }
-                    
-                    if appearanceOptions.contains(.leftShadow) {
-                        if let gradient = generateGradient(0.15, function: easeOutExpo) {
-                            ctx.drawLinearGradient(gradient, start: gradLeftL, end: gradLeftR, options: [.drawsAfterEndLocation, .drawsBeforeStartLocation])
-                        }
-                    }
-                    
-                    if appearanceOptions.contains(.rightShadow) {
-                        if let gradient = generateGradient(0.15, function: easeOutExpo) {
-                            ctx.drawLinearGradient(gradient, start: gradRightR, end: gradRightL, options: [.drawsAfterEndLocation, .drawsBeforeStartLocation])
-                        }
-                    }
-                    
-                    //ctx.scaleBy(x: 1, y: 1.0/stretchFactor)
                 }
                 
                 let img = UIGraphicsGetImageFromCurrentImageContext()
@@ -608,8 +464,6 @@ class DemoButton: ForceButton {
                 
                 if let img = img {
                     gradientCache[colorHash] = img
-                    
-                    //DebuggingSetGradientImages(gradientCache.count)
                     
                     return img
                 }
@@ -621,6 +475,14 @@ class DemoButton: ForceButton {
         }
         
         return _gradient
+    }()
+    
+    // MARK: Debugging
+    
+    private static var DebugDemoButtonsIdentifier: UInt = {
+        let id: UInt = 2
+        DebugCounter.counter.register(id: id, name: "Demo Buttons")
+        return id
     }()
 }
 

@@ -16,7 +16,7 @@ extension UIControlState: Hashable {
     }
 }
 
-public extension UIColor {
+extension UIColor {
     convenience public init(hex: UInt) {
         let b = ((hex >> 0) & 0xff)
         let g = ((hex >> 8) & 0xff)

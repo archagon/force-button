@@ -12,36 +12,58 @@ import ForceButtonFramework
 
 // NEXT:
 //  * clean up force button w/gesture code
-//  * clean up framework for public etc
-//  * re-enable scrolling
+//      * force button should not be able to start during scrolling
 //  * second touch next to held-open popup causes glitches
+//  * only one popup open at a time
+//  * wrong bounds for lower buttons
+//  * can't select button while scrolling
+//  * cleanup for non-force devices
+//  * divide by zero -- open popup, then reload data
 
-// NEXT:
-//  * show under button & match color
-//  * adjust curves
+/*
+ 
+ This demo project has a whole bunch of features (semi-) working in concert:
+ 
+   * 3 types of buttons: 3d touch enabled with no popups (red), regular with 3d touch popups (blue), and regular with long press popups (green).
+   * Popups that are laid out and sized automatically based on their location on screen.
+   * Popups that are always brought to the front when selected.
+   * Popup items that you can select without releasing your finger after triggering the popup, like native 3d touch.
+   * Popups that can be closed by tapping outside the popup.
+   * Simultaneous scrolling, with button and popup gestures that are cancelled once scrolling starts.
+   * When a popup is open and selecting stuff, scrolling is disabled and cannot cancel the popup.
+   * Only a single popup can be open at once.
+ 
+ The functionality to make all the above work is spread across several different files. Here are the important bits:
+ 
+   * ViewController uses a custom subclass of UICollectionViewFlowLayout that allows index paths to be brought to the front.
+   * DemoCell asks ViewController for popup layout information, requests popups to be brought to the front, and informs it of popups opening/closing.
+   * DemoCell exposes a gesture action that ViewController binds to its pan and pinch gesture recognizers (cancellation).
+   * DemoCell overrides hitTest for popup closing and to allow popup items to be selected outside the cell bounds.
+   * SelectionPopup does not handle any of its own selection, and instead exposes a method that DemoCell calls through its pan gesture recognizer.
+   * SelectionPopup does not handle any of its own peek/pop gestures, and instead exposes a 't' property. DemoCell controls it using several gestures.
+ 
+ Kinda confusing, and a bit boilerplate-y, but hopefully all the components are sufficiently decoupled to prevent headaches.
+ 
+ */
 
-protocol CellDelegate: class {
-    func cellShouldBeBroughtToFront(cell: DemoPopupCell)
-    func cellVerticalPopupPosition(cell: DemoPopupCell, size: CGSize, anchorInsets: UIEdgeInsets) -> (rect: CGRect, edgeOverlap: UIEdgeInsets)
-}
+class ViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, DemoCellDelegate {
 
-class ViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, CellDelegate {
-
+    // AB: this used to be necessary, but not anymore now that everything's gesture based... need to revisit
     class SlideyCollection : UICollectionView {
-        override func touchesShouldCancel(in view: UIView) -> Bool {
-            return true
-        }
-        
-        override init(frame: CGRect, collectionViewLayout layout: UICollectionViewLayout) {
-            super.init(frame: frame, collectionViewLayout: layout)
-            
-            self.delaysContentTouches = false
-            self.canCancelContentTouches = true
-        }
-        
-        required init?(coder aDecoder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
+//        override func touchesShouldCancel(in view: UIView) -> Bool {
+//            return true
+//        }
+//        
+//        override init(frame: CGRect, collectionViewLayout layout: UICollectionViewLayout) {
+//            super.init(frame: frame, collectionViewLayout: layout)
+//            
+//            self.delaysContentTouches = false
+//            self.canCancelContentTouches = true
+//        }
+//        
+//        required init?(coder aDecoder: NSCoder) {
+//            fatalError("init(coder:) has not been implemented")
+//        }
     }
     
     class PoppyLayout: UICollectionViewFlowLayout {
@@ -93,7 +115,35 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         }
     }
     
+    class ButtonHeader: UICollectionReusableView {
+        var button: UIButton
+        
+        override init(frame: CGRect) {
+            self.button = UIButton(type: .system)
+            
+            super.init(frame: frame)
+            
+            self.addSubview(button)
+            
+            button.translatesAutoresizingMaskIntoConstraints = false
+            let hConstraints = NSLayoutConstraint.constraints(withVisualFormat: "H:|-(h)-[button]-(h)-|", options: [], metrics: ["h":2], views: ["button":button])
+            let vConstraints = NSLayoutConstraint.constraints(withVisualFormat: "V:|-(v)-[button]-(v)-|", options: [], metrics: ["v":2], views: ["button":button])
+            NSLayoutConstraint.activate(hConstraints + vConstraints)
+            
+            button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 18)
+            button.layer.borderWidth = 1
+            button.layer.cornerRadius = 8
+            button.layer.borderColor = UIColor.blue.cgColor
+        }
+        
+        required init?(coder aDecoder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+    }
+    
     var collection: UICollectionView!
+    
+    // MARK: View Controller
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -103,11 +153,13 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         layout.itemSize = CGSize(width: width, height: width)
         layout.minimumLineSpacing = 0
         layout.minimumInteritemSpacing = 0
+        layout.headerReferenceSize = CGSize(width: 200, height: 44)
         
         let collection = SlideyCollection(frame: CGRect(x: 0, y: 0, width: 100, height: 100), collectionViewLayout: layout)
         collection.dataSource = self
         collection.delegate = self
         collection.register(DemoPopupCell.self, forCellWithReuseIdentifier: "Cell")
+        collection.register(ButtonHeader.self, forSupplementaryViewOfKind: UICollectionElementKindSectionHeader, withReuseIdentifier: "Header")
         collection.contentInset = UIEdgeInsetsMake(20, 0, 0, 0)
         collection.backgroundColor = .clear
         collection.translatesAutoresizingMaskIntoConstraints = false
@@ -120,9 +172,19 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         collection.bottomAnchor.constraint(equalTo: self.view.bottomAnchor).isActive = true
         collection.rightAnchor.constraint(equalTo: self.view.rightAnchor).isActive = true
         
-        // QQQ:
-        collection.isScrollEnabled = false
+        // DEBUG: for testing purposes
+        //collection.isScrollEnabled = false
     }
+    
+    override var shouldAutorotate: Bool {
+        return true
+    }
+    
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        return .all
+    }
+    
+    // MARK: Collection Delegate
     
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return 1000
@@ -136,20 +198,41 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         if let cell = cell as? DemoPopupCell {
             cell.delegate = self
             cell.button.on = false
+           
+            // AB: cancels the cell popup & button gestures whenever anything interesting happens in the scroll view
+            self.collection.panGestureRecognizer.addTarget(cell, action: #selector(DemoPopupCell.scrollViewCancellationHook))
+            self.collection.pinchGestureRecognizer?.addTarget(cell, action: #selector(DemoPopupCell.scrollViewCancellationHook))
         }
     }
     
-    override var shouldAutorotate: Bool {
-        return true
+    func collectionView(_ collectionView: UICollectionView, didEndDisplaying cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        if let cell = cell as? DemoPopupCell {
+            // TODO: not sure if this is necessary
+            self.collection.panGestureRecognizer.removeTarget(cell, action: nil)
+            self.collection.pinchGestureRecognizer?.removeTarget(cell, action: nil)
+        }
     }
     
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        return .all
+    func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
+        let view = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: "Header", for: indexPath)
+        
+        if let view = view as? ButtonHeader {
+            view.button.setTitle("Reload Data", for: .normal)
+            view.button.addTarget(self, action: #selector(reloadData), for: .touchUpInside)
+        }
+
+        return view
+    }
+    
+    // MARK: Cell Delegate
+    
+    func cellDidSelectItem(cell: DemoPopupCell, item: Int) {
+        print("cell selected item \(item)")
     }
     
     func cellShouldBeBroughtToFront(cell: DemoPopupCell) {
         if let indexPath = self.collection.indexPath(for: cell) {
-            (self.collection.collectionViewLayout as! PoppyLayout).popItemAtIndexPath(indexPath: indexPath)
+            (self.collection.collectionViewLayout as? PoppyLayout)?.popItemAtIndexPath(indexPath: indexPath)
         }
     }
     
@@ -157,6 +240,11 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         let edgeInset: CGFloat = 4
         
         if let _ = self.collection.indexPath(for: cell) {
+            // BUGFIX: self.collection would be more accurate, but doesn't work due to scroll view shenanigans
+            guard let frameOfReference = self.view else {
+                return (CGRect.zero, UIEdgeInsets.zero)
+            }
+            
             var workingRect = CGRect.zero
             workingRect.size = size
             
@@ -164,11 +252,11 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
                                          y: -anchorInsets.top,
                                          width: cell.contentView.bounds.size.width + anchorInsets.left + anchorInsets.right,
                                          height: cell.contentView.bounds.size.height + anchorInsets.top + anchorInsets.bottom)
-            let anchorRect = cell.convert(localAnchorRect, to: self.collection)
+            let anchorRect = cell.contentView.convert(localAnchorRect, to: frameOfReference)
             
             vertical: do {
                 let top = anchorRect.minY - edgeInset
-                let bottom = -anchorRect.maxY + self.collection.bounds.size.height - edgeInset
+                let bottom = -anchorRect.maxY + frameOfReference.bounds.size.height - edgeInset
                 
                 if size.height <= top {
                     workingRect.origin.y = localAnchorRect.minY - workingRect.size.height
@@ -181,7 +269,7 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
             
             horizontal: do {
                 let left = anchorRect.midX - workingRect.size.width/2 - edgeInset
-                let right = -(anchorRect.midX + workingRect.size.width/2) + self.collection.bounds.size.width - edgeInset
+                let right = -(anchorRect.midX + workingRect.size.width/2) + frameOfReference.bounds.size.width - edgeInset
                 
                 let midX = (localAnchorRect.midX - workingRect.size.width/2)
                 
@@ -196,11 +284,12 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
                 }
             }
             
-            let collectionWorkingRect = cell.convert(workingRect, to: self.collection)
+            let collectionWorkingRect = cell.contentView.convert(workingRect, to: frameOfReference)
+            
             let overlap = UIEdgeInsetsMake(max(0, 0 - collectionWorkingRect.minY),
                                            max(0, 0 - collectionWorkingRect.minX),
-                                           max(0, collectionWorkingRect.maxY - self.collection.bounds.size.height),
-                                           max(0, collectionWorkingRect.maxX - self.collection.bounds.size.width))
+                                           max(0, collectionWorkingRect.maxY - frameOfReference.bounds.size.height),
+                                           max(0, collectionWorkingRect.maxX - frameOfReference.bounds.size.width))
             
             
             return (workingRect, overlap)
@@ -208,463 +297,39 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         
         return (CGRect.zero, UIEdgeInsets.zero)
     }
-}
-
-// a collection view cell featuring a custom-drawn button and a 3d touch popup
-class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
-    enum CellType {
-        case popup
-        case longPress
-        case pressure
-    }
     
-    enum PopupState {
-        case closed
-        case pushing
-        case opening
-        case open
-        case closing
-    }
-    
-    weak var delegate: CellDelegate?
-    private var cellType: CellType
-    
-    // views
-    private(set) var button: DemoButton
-    private var popup: SelectionPopup?
-    
-    // gestures
-    private var popupGesture: SimpleDeepTouchGestureRecognizer
-    private var popupSelectionGesture: SimpleMovementGestureRecognizer
-    private var popupLongHoldGesture: UILongPressGestureRecognizer
-    
-    // popup state
-    private var popupOpenAnimation: Animation?
-    private var popupCloseAnimation: Animation?
-    private var popupState: PopupState = .closed
-    
-    // hardware
-    private var feedback: UIImpactFeedbackGenerator
-    
-    override init(frame: CGRect) {
-        let rand = arc4random_uniform(3)
-        self.cellType = (rand == 0 ? .popup : (rand == 1 ? .longPress : .pressure))
-        
-        let button = DemoButton()
-        self.button = button
-        self.popupGesture = SimpleDeepTouchGestureRecognizer()
-        self.popupSelectionGesture = SimpleMovementGestureRecognizer()
-        self.popupLongHoldGesture = UILongPressGestureRecognizer()
-        self.feedback = UIImpactFeedbackGenerator(style: .heavy)
-        
-        super.init(frame: frame)
-        
-        self.popupGesture.addTarget(self, action: #selector(popupDeepTouch))
-        self.popupSelectionGesture.addTarget(self, action: #selector(popupMovement))
-        self.popupLongHoldGesture.addTarget(self, action: #selector(popupLongPress))
-        self.popupGesture.delegate = self
-        self.popupSelectionGesture.delegate = self
-        self.popupLongHoldGesture.delegate = self
-        self.addGestureRecognizer(self.popupGesture)
-        self.addGestureRecognizer(self.popupSelectionGesture)
-        self.addGestureRecognizer(self.popupLongHoldGesture)
-        
-        self.contentView.addSubview(button)
-        
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.leftAnchor.constraint(equalTo: self.leftAnchor).isActive = true
-        button.topAnchor.constraint(equalTo: self.topAnchor).isActive = true
-        button.bottomAnchor.constraint(equalTo: self.bottomAnchor).isActive = true
-        button.rightAnchor.constraint(equalTo: self.rightAnchor).isActive = true
-        
-        buttonSetup: do {
-            button.setColor((cellType == .popup ? UIColor.blue : (cellType == .longPress ? UIColor.green : UIColor.red)).lightenByAmount(0.5))
-            button.addTarget(self, action: #selector(buttonOn), for: .valueChanged)
-            button.supportsPressure = (cellType == .pressure)
+    // AB: all this stuff simulates exclusive touch, to prevent popups from opening over each other
+    var popupHasBegun: Bool = false
+    var popupIsOpen: Bool = false {
+        didSet {
+            // disable popup cancellation while a popup is open, so as to not interfere with selection
+            self.collection.isScrollEnabled = !popupIsOpen
         }
-        
-        self.popupLongHoldGesture.isEnabled = (cellType == .longPress)
-        self.popupGesture.isEnabled = (cellType == .popup)
     }
     
-    required init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        let view = super.hitTest(point, with: event)
-        
-        if view == nil {
-            if let popup = self.popup {
-                let popupPoint = self.convert(point, to: popup)
-                let popupShape = popup.currentShape
-                
-                if popupShape.contains(popupPoint) {
-                    return popup
-                }
-                else {
-                    closePopup()
-                    return UIView() //KLUDGE: ensures that touches don't do anything
-                }
-            }
-        }
-        
-        return view
-    }
-    
-    func buttonOn(_ button: DemoButton) {
-        closePopup()
-    }
-    
-    func popupDeepTouch(gesture: SimpleDeepTouchGestureRecognizer) {
-        self.delegate?.cellShouldBeBroughtToFront(cell: self)
-        
-        let gestureOver = !(gesture.state == .began || gesture.state == .changed)
-        
-        if self.popupState == .open || self.popupState == .opening {
-            return
-        }
-        
-        self.button.cancelTouches()
-        
-        if gestureOver  {
-            closePopup()
+    func cellShouldBeginPopup(cell: DemoPopupCell) -> Bool {
+        if popupHasBegun {
+            return false
         }
         else {
-            openPopup(t: gesture.t)
+            popupHasBegun = true
+            return true
         }
     }
     
-    func popupMovement(gesture: SimpleMovementGestureRecognizer) {
-        self.delegate?.cellShouldBeBroughtToFront(cell: self)
-        
-        let gestureOver = !(gesture.state == .began || gesture.state == .changed)
-        
-        if self.popupState != .open {
-            return
-        }
-        
-        if gestureOver {
-            if self.popup?.selectedItem != nil {
-                closePopup()
-            }
-        }
-        else {
-            self.popup?.changeSelection(gesture.location(in: nil))
-        }
+    func cellDidOpenPopup(cell: DemoPopupCell) {
+        assert(popupHasBegun)
+        popupIsOpen = true
     }
     
-    func popupLongPress(gesture: UILongPressGestureRecognizer) {
-        if !(gesture.state == .began || gesture.state == .recognized) {
-            return
-        }
-        
-        self.delegate?.cellShouldBeBroughtToFront(cell: self)
-        
-        self.button.cancelTouches()
-        
-        openPopup()
+    func cellDidClosePopup(cell: DemoPopupCell) {
+        popupIsOpen = false
+        popupHasBegun = false
     }
     
-    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return true
-    }
+    // MARK: Public Interface Methods
     
-    func cancel() {
-        // TODO: cancel gestures & button gestures
-        self.button.cancelTouches()
-        closePopup()
-    }
-    
-    func openPopup(t: Double? = nil) {
-        if let t = t {
-            let tStart: Double = 0.3
-            let tEnd: Double = 0.75
-            
-            let scaledT: Double
-            
-            if t >= tEnd {
-                scaledT = 0.5 + (t - tEnd) / (1 - tEnd) * 0.5
-            }
-            else if t >= tStart && t < tEnd {
-                scaledT = ((t - tStart) / (tEnd - tStart)) * 0.5
-            }
-            else {
-                scaledT = 0
-            }
-        
-            //TOOD: move
-            if t >= tEnd {
-                if self.popupState == .pushing {
-                    self.feedback.impactOccurred()
-                }
-            }
-            
-            if t >= tEnd {
-                switchPopupState(.opening)
-            }
-            else {
-                switchPopupState(.pushing)
-            }
-            
-            if self.popupState == .pushing {
-                self.popup?.t = scaledT
-            }
-        }
-        else {
-            switchPopupState(.opening)
-        }
-    
-        validatePopupState()
-    }
-    
-    func closePopup() {
-        switchPopupState(.closing)
-        validatePopupState()
-    }
-    
-    // not all states can switch to all other states
-    private func switchPopupState(_ state: PopupState) {
-        // TODO: does non-weak self cause a retain loop?
-        func addPopupIfNeeded() {
-            if self.popup == nil {
-                let popup = SelectionPopup(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
-                
-                for _ in 0..<(1 + arc4random_uniform(11)) {
-                    //for _ in 0..<1 {
-                    let view = UIView(frame: CGRect(x: 0,
-                                                    y: 0,
-                                                    width: CGFloat(100 + (Int(arc4random_uniform(50))-25)),
-                                                    height: CGFloat(100 + (Int(arc4random_uniform(50))-25))))
-                    view.backgroundColor = UIColor(hex: UInt(arc4random_uniform(0xffffff)))
-                    popup.addSelectionView(view: view)
-                }
-                
-                let superview = self.contentView
-                superview.insertSubview(popup, at: 0)
-                
-                popup.sizeToFit()
-                popup.layoutIfNeeded()
-                
-                guard let position = self.delegate?.cellVerticalPopupPosition(cell: self, size: popup.contentsFrame.size, anchorInsets: UIEdgeInsetsMake(popup.anchorExpandedInset.height, popup.anchorExpandedInset.width, popup.anchorExpandedInset.height, popup.anchorExpandedInset.width)) else {
-                    // TODO: remove popup
-                    assert(false)
-                    return
-                }
-                
-                // TODO: probably better to just compare blank frame to returned frame
-                let baseAnchorFrame = CGRect(x: -popup.anchorExpandedInset.width, y: -popup.anchorExpandedInset.height, width: self.contentView.bounds.size.width + popup.anchorExpandedInset.width * 2, height: self.contentView.bounds.size.height + popup.anchorExpandedInset.height * 2)
-                let anchorPosition = (baseAnchorFrame.midX - position.rect.origin.x)/position.rect.size.width
-                let top = position.rect.maxY <= 0
-                popup.anchorPosition = ((top ? 2 : 0), anchorPosition)
-                
-                popup.contentInset = position.edgeOverlap
-                
-                let anchorFrame = popup.anchorFrame
-                let anchorCenter = CGPoint(x: anchorFrame.midX, y: anchorFrame.midY)
-                let anchorCenterSuperview = popup.convert(anchorCenter, to: superview)
-                let anchorTargetSuperview = self.convert(CGPoint(x: self.bounds.size.width * 0.5, y: self.bounds.size.height * 0.5), to: superview)
-                let anchorDiff = CGPoint(x: anchorTargetSuperview.x - anchorCenterSuperview.x, y: anchorTargetSuperview.y - anchorCenterSuperview.y)
-                
-                popup.frame.origin = CGPoint(x: popup.frame.origin.x + anchorDiff.x,
-                                             y: popup.frame.origin.y + anchorDiff.y)
-                
-                popup.color = button.darkColor.darkenByAmount(0.25)
-                
-                self.popup = popup
-                
-                //weakButton.gesture.addTarget(popup, action: #selector(SelectionPopup.gestureRecognizerAction))
-            }
-        }
-        
-        func addPopupCloseAnimationIfNeeded() {
-            guard let popup = self.popup else {
-                return
-            }
-            
-            if self.popupCloseAnimation == nil {
-                self.popupCloseAnimation = Animation(duration: 0.1, delay: 0, start: CGFloat(popup.t), end: 0, block: {
-                    [weak popup, weak self] (t: CGFloat, tScaled: CGFloat, val: CGFloat) in
-
-                    guard let popup = popup else {
-                        return
-                    }
-                    guard let weakSelf = self else {
-                        return
-                    }
-
-                    popup.t = Double(val)
-
-                    if t >= 1 {
-                        weakSelf.switchPopupState(.closed)
-                    }
-                    }, tFunc: { (t: Double)->Double in
-                        // compensating for 0.5/0.5 split
-                        let scaledT: Double
-                        let divider: Double = 0.6
-
-                        if t <= divider {
-                            scaledT = 0.5 * (t / divider)
-                        }
-                        else {
-                            scaledT = 0.5 + 0.5 * ((t - divider) / (1 - divider))
-                        }
-
-                        return linear(scaledT)
-                })
-                self.popupCloseAnimation?.start()
-            }
-        }
-        
-        func addPopupOpenAnimationIfNeeded() {
-            guard let popup = self.popup else {
-                return
-            }
-            
-            if self.popupOpenAnimation == nil {
-                self.popupOpenAnimation = Animation(duration: 0.25, delay: 0, start: 0.5, end: 1, block: {
-                    [weak popup, weak self] (t: CGFloat, tScaled: CGFloat, val: CGFloat) in
-                    
-                    guard let popup = popup else {
-                        return
-                    }
-                    guard let weakSelf = self else {
-                        return
-                    }
-                    
-                    popup.t = Double(val)
-                    
-                    if t >= 1 {
-                        weakSelf.switchPopupState(.open)
-                    }
-                    }, tFunc: easeOutCubic)
-                self.popupOpenAnimation?.start()
-            }
-        }
-        
-        let originalState = self.popupState
-        var newState: PopupState = state
-        
-        // early return
-        switch originalState {
-        case .closed:
-            switch newState {
-            case .closed:
-                fallthrough
-            case .closing:
-                return
-            default:
-                break
-            }
-        case .pushing:
-            switch newState {
-            case .pushing:
-                return
-            default:
-                break
-            }
-        case .opening:
-            switch newState {
-            case .pushing:
-                fallthrough
-            case .opening:
-                return
-            default:
-                break
-            }
-        case .open:
-            switch newState {
-            case .pushing:
-                fallthrough
-            case .opening:
-                fallthrough
-            case .open:
-                return
-            default:
-                break
-            }
-        case .closing:
-            switch newState {
-            default:
-                break
-            }
-        }
-        
-        // adjust state
-        switch newState {
-        case .opening:
-            if let popup = self.popup, popup.t == 1 {
-                newState = .open
-            }
-        case .closing:
-            if let popup = self.popup, popup.t == 0 {
-                newState = .closed
-            }
-        default:
-            break
-        }
-    
-        //print("changing state from \(originalState) to \(newState)")
-        
-        switch newState {
-        case .closed:
-            self.popup?.removeFromSuperview()
-            self.popup = nil
-            self.popupOpenAnimation = nil
-            self.popupCloseAnimation = nil
-        case .pushing:
-            addPopupIfNeeded()
-            self.popup?.cancel()
-            self.popupOpenAnimation = nil
-            self.popupCloseAnimation = nil
-        case .opening:
-            addPopupIfNeeded()
-            self.popup?.cancel()
-            self.popupCloseAnimation = nil
-            addPopupOpenAnimationIfNeeded()
-        case .open:
-            addPopupIfNeeded()
-            self.popupOpenAnimation = nil
-            self.popupCloseAnimation = nil
-            self.popup?.t = 1
-        case .closing:
-            addPopupIfNeeded()
-            self.popup?.cancel()
-            self.popupOpenAnimation = nil
-            addPopupCloseAnimationIfNeeded()
-        }
-        
-        self.popupState = newState
-    }
-    
-    func validatePopupState() {
-        switch self.popupState {
-        case .closed:
-            assert(self.popup == nil)
-            assert(self.popupOpenAnimation == nil)
-            assert(self.popupCloseAnimation == nil)
-            break
-        case .pushing:
-            assert(self.popup != nil)
-            assert(self.popupOpenAnimation == nil)
-            assert(self.popupCloseAnimation == nil)
-            break
-        case .opening:
-            assert(self.popup != nil)
-            assert(self.popupOpenAnimation != nil)
-            assert(self.popupCloseAnimation == nil)
-            break
-        case .open:
-            assert(self.popup != nil)
-            assert(self.popupOpenAnimation == nil)
-            assert(self.popupCloseAnimation == nil)
-            assert(self.popup!.t == 1)
-            break
-        case .closing:
-            assert(self.popup != nil)
-            assert(self.popupOpenAnimation == nil)
-            assert(self.popupCloseAnimation != nil)
-            break
-        }
+    func reloadData() {
+        self.collection.reloadData()
     }
 }

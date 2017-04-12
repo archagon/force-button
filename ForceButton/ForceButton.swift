@@ -15,7 +15,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // state provided by UIControl. This is what actually corresponds to the visible button state. By default,
     // display state changes are animated.
     
-    public static let StandardTapForce: Double = 0.18 //0.15 according to Apple docs, but 0.18 works slightly better for this case
+    public static let StandardTapForce: Double = 0.2 //0.15 according to Apple docs, but works slightly better for this case
     
     // MARK: - Properties -
     
@@ -296,7 +296,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     private var animation: (delay: Double, start: Double, end: Double, startTime: TimeInterval, duration: TimeInterval, function: ((Double)->Double), additiveFunction:((Double)->Double)?)? {
         didSet {
             if let displayLink = self.animationDisplayLink {
-                DebuggingDeregisterDisplayLink()
+                DebugCounter.counter.decrement(ForceButton.DebugDisplayLinksIdentifier)
                 displayLink.invalidate()
                 self.animationDisplayLink = nil
             }
@@ -305,7 +305,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 self.t = animation.start
                 
                 let animationDisplayLink = CADisplayLink.init(target: self, selector: #selector(animation(displayLink:)))
-                DebuggingRegisterDisplayLink()
+                DebugCounter.counter.increment(ForceButton.DebugDisplayLinksIdentifier)
                 animationDisplayLink.add(to: RunLoop.main, forMode: RunLoopMode.commonModes)
                 self.animationDisplayLink = animationDisplayLink
             }
@@ -348,7 +348,13 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // MARK: - Lifecycle -
     
+    deinit {
+        DebugCounter.counter.decrement(ForceButton.DebugForceButtonsIdentifier)
+    }
+    
     override public init(frame: CGRect) {
+        DebugCounter.counter.increment(ForceButton.DebugForceButtonsIdentifier)
+        
         super.init(frame: frame)
         
         if let style = self.tapticStyle {
@@ -388,11 +394,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         self.deepTouchGestureRecognizer.cancel()
     }
     
-    // MARK: - Actions -
-    
-    // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
-    private var tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
-    private var deepTouchStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    // MARK: - Gestures -
     
     private func pointInsideTapBounds(_ p: CGPoint) -> Bool {
         return !(p.x >= self.bounds.size.width + cancellationThreshhold ||
@@ -401,11 +403,33 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             p.y <= -cancellationThreshhold)
     }
     
+    // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
+    private var tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    private var deepTouchStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    
+    override open func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer == self.panGestureRecognizer {
+            // if we're in deep touch mode and another finger comes in, make sure it can't start another pan gesture
+            if self.is3dTouching {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
+    // AB: since both gesture recognizers are "sensors" that are immediately recognized (basically), this prevents
+    // lock up with e.g. scroll views
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
+    
+    // handles non-deep-touch taps, highlights, etc. (i.e. standard UIButton behavior)
     @objc private func tapEvents(recognizer: SimpleMovementGestureRecognizer) {
         switch recognizer.state {
-            
         case .began:
-            print("tap gesture recognizer began")
+            //print("tap gesture recognizer began")
+            
             self.animation = nil
             
             fallthrough
@@ -422,8 +446,9 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             }
             
             break
-            
         case .ended:
+            //print("tap gesture recognizer ended")
+            
             if let startingConditions = self.tapStartingConditions {
                 let p1 = recognizer.location(in: nil)
                 let localPoint = self.convert(p1, from: nil)
@@ -439,12 +464,9 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             }
 
             break
-            
         case .cancelled:
-            print("tap gesture recognizer cancelled")
-            fallthrough
-        case .failed:
-            print("tap gesture recognizer failed")
+            //print("tap gesture recognizer cancelled")
+            
             fallthrough
         default:
             // TOOD: cancellation animation
@@ -460,17 +482,24 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             }
             
             // TODO: move
+            // AB: this is unnecessary in 'ended' b/c if we're depressed, the value is necessarily different from start
             self.isDepressed = false
             
             break
         }
     }
 
+    // handles button deep touch mode
+    // TODO: check pointInsideTapBounds while not fully depressed
     @objc private func deepTouchEvents(recognizer: SimpleDeepTouchGestureRecognizer) {
         switch recognizer.state {
         case .began:
-            print("deep touch recognition began")
-            self.panGestureRecognizer.cancel() //TODO: move this elsewhere? NEXT:
+            //print("deep touch recognition began")
+            
+            // AB: these recognizers are closer to "sensors" than true gestures, so they have to be directly cancelled
+            // instead of setting up a gesture dependency graph; deep touch gesture replaces pan gesture when active
+            self.panGestureRecognizer.cancel()
+            
             self.animation = nil
             
             fallthrough
@@ -478,12 +507,13 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             if self.deepTouchStartingConditions == nil {
                 self.deepTouchStartingConditions = (position: recognizer.location(in: nil), time: CACurrentMediaTime(), value: self.on)
             }
-            
+                    
             if let startingConditions = self.deepTouchStartingConditions {
                 //let p1 = recognizer.location(in: nil)
                 //let localPoint = self.convert(p1, from: nil)
                 
                 let normalizedT = min(max((recognizer.t - recognizer.minimumForce) / (1 - recognizer.minimumForce), 0), 1)
+                let tTail = log10(1 + normalizedT)*0.7
                 
                 if startingConditions.value {
                     if self.on {
@@ -497,10 +527,10 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                             self.sendActions(for: .valueChanged)
                         }
                         
-                        self.t = self.snapOnT + log10(1 + normalizedT)
+                        self.t = self.snapOnT + tTail
                     }
                     else {
-                        self.t = self.snapOnT + log10(1 + normalizedT)
+                        self.t = self.snapOnT + tTail
                     }
                 }
                 else {
@@ -523,6 +553,8 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 }
             }
         case .ended:
+            //print("deep touch gesture recognizer ended")
+            
             if let startingConditions = self.deepTouchStartingConditions {
                 // AB: force animation if we're on the wrong t, even if the state is correct; happens on 'off'
                 // KLUDGE: we don't do this on 'on' b/c 'on' starts ignoring the gesture after triggering
@@ -537,7 +569,8 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             
             break
         case .cancelled:
-            print("deep touch gesture recognizer cancelled")
+            //print("deep touch gesture recognizer cancelled")
+            
             fallthrough
         default:
             if let startingConditions = self.deepTouchStartingConditions {
@@ -580,7 +613,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     @objc private func animation(displayLink: CADisplayLink) {
         guard let animation = self.animation else {
             if let displayLink = self.animationDisplayLink {
-                DebuggingDeregisterDisplayLink()
+                DebugCounter.counter.decrement(ForceButton.DebugDisplayLinksIdentifier)
                 displayLink.invalidate()
                 self.animationDisplayLink = nil
             }
@@ -608,91 +641,26 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             self.animation = nil
             
             if let displayLink = self.animationDisplayLink {
-                DebuggingDeregisterDisplayLink()
+                DebugCounter.counter.decrement(ForceButton.DebugDisplayLinksIdentifier)
                 displayLink.invalidate()
                 self.animationDisplayLink = nil
             }
         }
     }
     
-    // MARK: - Gesture Recognizers -
+    // MARK: Debugging
     
-    // NEXT: figure out a way to cancel simple pan as soon as any other gesture recognizer is begun
-    // AB: why cancel? both our tap and deep touch recognizers begin pretty much immediately (for feedback re: button
-    // state) and so nothing can really prevent them
-    // prevents gesture from eating up scroll view pan
-    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-//        print("other gesture recognizer: \(type(of:otherGestureRecognizer)) w/state \(otherGestureRecognizer.state.rawValue)")
-        
-        if gestureRecognizer == self.panGestureRecognizer {
-            switch otherGestureRecognizer.state {
-            case .began:
-                fallthrough
-            case .changed:
-                if otherGestureRecognizer.canPrevent(gestureRecognizer) {
-                    gestureRecognizer.cancel()
-                }
-                return true
-                
-            case .possible:
-                fallthrough
-            case .ended:
-                fallthrough
-            case .cancelled:
-                fallthrough
-            case .failed:
-                return true
-            }
-        }
-        
-        else if gestureRecognizer == self.deepTouchGestureRecognizer {
-            switch otherGestureRecognizer.state {
-            case .began:
-                fallthrough
-            case .changed:
-                if otherGestureRecognizer != self.panGestureRecognizer && otherGestureRecognizer.canPrevent(gestureRecognizer) {
-                    gestureRecognizer.cancel()
-                }
-                return true
-                
-            case .possible:
-                fallthrough
-            case .ended:
-                fallthrough
-            case .cancelled:
-                fallthrough
-            case .failed:
-                return true
-            }
-        }
-        
-//        if gestureRecognizer == self.panGestureRecognizer {
-//            self.panGestureRecognizer.isEnabled = false
-//            self.panGestureRecognizer.isEnabled = true
-//        }
-        
-////        if gestureRecognizer == self.tapGestureRecognizer {
-//        if false {
-//            return false
-//        }
-//        else if gestureRecognizer == self.deepTouchGestureRecognizer {
-////            if otherGestureRecognizer == self.tapGestureRecognizer {
-//            if false {
-//                return false
-//            }
-//            else {
-//            // TODO: there's gotta be some better way to do this! we want to make it so that any other gesture causes this one to fail
-//                if otherGestureRecognizer.state == .recognized || otherGestureRecognizer.state == .began || otherGestureRecognizer.state == .changed  {
-//                    gestureRecognizer.isEnabled = false
-//                    gestureRecognizer.isEnabled = true
-//                }
-//                
-//                return true
-//            }
-//        }
-//        
-        return true
-    }
+    private static var DebugDisplayLinksIdentifier: UInt = {
+        let id: UInt = 100000 // TODO: find a way to avoid conflicts with outside users
+        DebugCounter.counter.register(id: id, name: "FB Display Links")
+        return id
+    }()
+    
+    private static var DebugForceButtonsIdentifier: UInt = {
+        let id: UInt = 100001
+        DebugCounter.counter.register(id: id, name: "Force Buttons")
+        return id
+    }()
 }
 
 // MARK: - Helpers -
@@ -743,61 +711,4 @@ fileprivate func dampenedSine(_ t: Double) -> Double {
     let returnT = initialAmplitude * pow(M_E, -decayConstant * t) * sin(angularFrequency * t)
     
     return returnT
-}
-
-// MARK: Debugging
-
-// AB: these aren't terribly useful for general use, but I use them in another project so they're stayin' in
-
-fileprivate let DebuggingPrintMessages: Bool = false
-
-fileprivate let DebuggingPrintInterval: TimeInterval = 0.5
-fileprivate var DebuggingDisplayLinks = 0
-fileprivate var DebuggingLastPrint: TimeInterval = 0
-
-func DebuggingRegisterDisplayLink(_ print: Bool = true) {
-    DebuggingDisplayLinks += 1
-    
-    if print {
-        DebuggingPrint()
-    }
-}
-
-fileprivate func DebuggingDeregisterDisplayLink(_ print: Bool = true) {
-    DebuggingDisplayLinks -= 1
-    
-    if print {
-        DebuggingPrint()
-    }
-}
-
-fileprivate func DebuggingPrint() {
-    let time = CACurrentMediaTime()
-    
-    var shouldPrint: Bool
-    
-    if DebuggingLastPrint == 0 {
-        shouldPrint = true
-    }
-    else {
-        let delta = time - DebuggingLastPrint
-        
-        if delta > DebuggingPrintInterval {
-            shouldPrint = true
-        }
-        else {
-            shouldPrint = false
-        }
-    }
-    
-    shouldPrint = (DebuggingPrintMessages ? shouldPrint : false)
-    
-    if shouldPrint {
-        print("\n")
-        print("――――――――DEBUG――――――――")
-        print("‣ FB Display Links: \(DebuggingDisplayLinks)")
-        print("―――――――――――――――――――――")
-        
-        DebuggingLastPrint = time
-    }
 }

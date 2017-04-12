@@ -333,7 +333,7 @@ public class SimpleFakeDeepTouchGestureRecognizer: UIGestureRecognizer {
 }
 
 extension UIGestureRecognizer {
-    func cancel() {
+    public func cancel() {
         let wasEnabled = self.isEnabled
         self.isEnabled = false
         self.isEnabled = wasEnabled
