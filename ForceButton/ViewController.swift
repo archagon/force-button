@@ -19,6 +19,7 @@ import ForceButtonFramework
 //  * can't select button while scrolling
 //  * cleanup for non-force devices
 //  * divide by zero -- open popup, then reload data
+//  * check memory
 
 /*
  

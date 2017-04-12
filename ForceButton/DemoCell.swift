@@ -130,6 +130,11 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         return view
     }
     
+    override func prepareForReuse() {
+        switchPopupState(.closed) //prevents animation
+        cancel()
+    }
+    
     // MARK: Button Delegate
     
     func buttonOn(_ button: DemoButton) {
@@ -139,14 +144,10 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     // MARK: Gesture Actions
     
     func popupDeepTouch(gesture: SimpleDeepTouchGestureRecognizer) {
+        // AB: gestures don't do anything when open(ing), but work at all other times
         if self.popupState == .open || self.popupState == .opening {
             return
         }
-        
-        self.delegate?.cellShouldBeBroughtToFront(cell: self)
-        
-        //self.popupLongHoldGesture.cancel()
-        self.button.cancelTouches()
         
         let gestureOver = !(gesture.state == .began || gesture.state == .changed)
         
@@ -159,24 +160,22 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     }
     
     func popupLongPress(gesture: UILongPressGestureRecognizer) {
-        if !(gesture.state == .began || gesture.state == .recognized) {
+        // AB: gestures don't do anything when open(ing), but work at all other times
+        if self.popupState == .open || self.popupState == .opening {
             return
         }
         
-        self.delegate?.cellShouldBeBroughtToFront(cell: self)
+        let gestureRecognized = (gesture.state == .began || gesture.state == .recognized)
         
-        //self.popupPressureGesture.cancel()
-        self.button.cancelTouches()
-        
-        openPopup()
+        if gestureRecognized {
+            openPopup()
+        }
     }
     
     func popupSelection(gesture: SimpleMovementGestureRecognizer) {
         if self.popupState != .open {
             return
         }
-        
-        self.delegate?.cellShouldBeBroughtToFront(cell: self)
         
         let gestureOver = !(gesture.state == .began || gesture.state == .changed)
         
@@ -197,7 +196,8 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         if (gestureRecognizer == self.popupLongHoldGesture && otherGestureRecognizer == self.popupPressureGesture) ||
             (gestureRecognizer == self.popupPressureGesture && otherGestureRecognizer == self.popupLongHoldGesture)
         {
-            // this is more correct than calling cancel() as above, but it's also more limiting... works for now, though
+            // AB: this is more correct than calling cancel() whenever one or the other gesture is recognized,
+            // but it's also more limiting... works for now, though, since pressure gesture has starting point
             return false
         }
         else {
@@ -224,13 +224,6 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
                 scaledT = 0
             }
             
-            //TOOD: move
-            if t >= tEnd {
-                if self.popupState == .pushing {
-                    self.feedback.impactOccurred()
-                }
-            }
-            
             if t >= tEnd {
                 switchPopupState(.opening)
             }
@@ -245,16 +238,13 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         else {
             switchPopupState(.opening)
         }
-        
-        validatePopupState()
     }
     
     func closePopup() {
         switchPopupState(.closing)
-        
-        validatePopupState()
     }
     
+    // manages popup t state, animations, and also a few delegate calls; does not deal with gestures, hardware, etc.
     // NOTE: not all states can switch to all other states
     private func switchPopupState(_ state: PopupState) {
         // AB: these helper functions capture self, but do not escape the outer method, and thus there is no retain loop
@@ -475,10 +465,40 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         }
         
         self.popupState = newState
+        
+        makePopupStateConsistent(oldState: originalState, newState: newState)
     }
     
-    func validatePopupState() {
-        switch self.popupState {
+    // interface with non-popup stuff; ensures switchPopupState doesn't have to concern itself with things that call it,
+    // e.g. gestures and their cancellation (even though it's called from switchPopupState, for convenience)
+    func makePopupStateConsistent(oldState: PopupState, newState: PopupState) {
+        do {
+            self.delegate?.cellShouldBeBroughtToFront(cell: self)
+            
+            if oldState == .pushing && (newState == .open || newState == .opening) {
+                self.feedback.impactOccurred()
+            }
+            
+            if newState == .pushing {
+                // usually happens when long hold is interrupted by pressure
+                self.popupLongHoldGesture.cancel()
+            }
+            
+            if newState == .opening {
+                // neither opening gesture needs to persist after activation
+                // BUGFIX: prevents long press from immediately reopening popup after selection
+                self.popupPressureGesture.cancel()
+                self.popupLongHoldGesture.cancel()
+            }
+            
+            if newState == .opening || newState == .pushing {
+                // TODO: should this also be called when .open or .closing?
+                self.button.cancel()
+            }
+        }
+        
+        // asserts
+        switch newState {
         case .closed:
             assert(self.popup == nil)
             assert(self.popupOpenAnimation == nil)
@@ -511,9 +531,8 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     // MARK: Public Interface Methods
     
     func cancel() {
-        self.button.cancelTouches()
-        
-        // TODO: these should also be in close popup, maybe?
+        // AB: these might be handled by makePopupStateConsistent, but better safe than sorry
+        self.button.cancel()
         self.popupPressureGesture.cancel()
         self.popupLongHoldGesture.cancel()
         self.popupSelectionGesture.cancel()
@@ -522,6 +541,7 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     }
     
     // hooks up to outside scroll view gestures to cancel whenever panning or zooming occurs
+    // AB: can't use scroll view's 'touchesShouldCancel(in view:)' b/c apparently gestures are not cancelled by this
     func scrollViewCancellationHook(gesture: UIGestureRecognizer) {
         if gesture.state == .began {
             self.cancel()

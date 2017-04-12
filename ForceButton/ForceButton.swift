@@ -31,7 +31,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     public var supportsPressure: Bool = true {
         didSet {
-            cancelTouches()
+            cancel()
             traitCollectionDidChange(self.traitCollection)
         }
     }
@@ -389,7 +389,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         // and do nothing on 'unknown'
     }
     
-    public func cancelTouches() {
+    public func cancel() {
         self.panGestureRecognizer.cancel()
         self.deepTouchGestureRecognizer.cancel()
     }

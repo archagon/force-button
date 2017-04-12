@@ -170,7 +170,13 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     
     // MARK: Lifecycle
     
+    deinit {
+        DebugCounter.counter.decrement(SelectionPopup.DebugSelectionPopupsIdentifier)
+    }
+    
     override public init(frame: CGRect) {
+        DebugCounter.counter.increment(SelectionPopup.DebugSelectionPopupsIdentifier)
+        
         self.previousSize = CGSize.zero
         
         let shape = BezierBackgroundView(frame: UIArbitraryStartingFrame)
@@ -398,7 +404,8 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         #endif
         
         // fixed layout properties
-        let stubStartCornerRadius: CGFloat = 4
+        // TODO: move these to properties
+        let stubStartCornerRadius: CGFloat = 8
         let stubEndCornerRadius: CGFloat = 12
         let contentsCornerRadius: CGFloat = 16
         let minStubSlopeClampedT: CGFloat = 0.5 //the slope angle and bezier can be clamped if too close to contents side
@@ -994,6 +1001,14 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             self.contentsContainer.alpha = contentsExpandT
         }
     }
+    
+    // MARK: Debugging
+    
+    private static var DebugSelectionPopupsIdentifier: UInt = {
+        let id: UInt = 100010
+        DebugCounter.counter.register(id: id, name: "Selection Popups")
+        return id
+    }()
 }
 
 // layout: these should not access view data and instead operate purely mathematically (though we make an exception for the title field)
