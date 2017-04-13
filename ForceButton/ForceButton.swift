@@ -9,6 +9,8 @@
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
+// TODO: pressure should check within radius
+
 open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // AB: There are two types of state to track here. First, there's the value state — on or off. This is stored
     // as a separate property and causes the button to change its display state. The second is the display

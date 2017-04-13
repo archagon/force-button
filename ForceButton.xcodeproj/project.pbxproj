@@ -126,8 +126,8 @@
 			isa = PBXGroup;
 			children = (
 				4E7685E21DA611E100AD0562 /* ForceButton.swift */,
-				4E228C301E85A394009F88FA /* SimpleGestures.swift */,
 				4E26C0641E809B66002FA204 /* SelectionPopup.swift */,
+				4E228C301E85A394009F88FA /* SimpleGestures.swift */,
 				4E5DC3B21E94BFCF00A9977E /* Helpers.swift */,
 				4EB5C13A1E95C8FA0046DE93 /* Extensions.swift */,
 				4E5DC3B41E94C08300A9977E /* Easing.swift */,

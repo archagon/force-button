@@ -59,7 +59,7 @@ public class SimpleMovementGestureRecognizer: UIGestureRecognizer {
         
         self.firstTouch = nil
         
-        print("resetting simple pan")
+        //print("resetting simple pan")
     }
 }
 
@@ -166,7 +166,7 @@ public class SimpleDeepTouchGestureRecognizer: UIGestureRecognizer {
         self.t = 0
         self.firstTouch = nil
         
-        print("resetting simple press")
+        //print("resetting simple press")
     }
 }
 

@@ -13,12 +13,7 @@ import ForceButtonFramework
 // NEXT:
 //  * clean up force button w/gesture code
 //      * force button should not be able to start during scrolling
-//  * second touch next to held-open popup causes glitches
-//  * only one popup open at a time
-//  * wrong bounds for lower buttons
-//  * can't select button while scrolling
 //  * cleanup for non-force devices
-//  * divide by zero -- open popup, then reload data
 //  * check memory
 
 /*

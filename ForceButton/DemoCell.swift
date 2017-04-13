@@ -9,8 +9,8 @@
 import UIKit
 import ForceButtonFramework
 
-// TODO: round sizes to nearest pixel
 // TODO: cellShouldBeBroughtToFront only if allowed to open
+// TODO: pressure should check within radius
 
 protocol DemoCellDelegate: class {
     func cellDidSelectItem(cell: DemoPopupCell, item: Int)
@@ -479,6 +479,8 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
                 self.feedback.impactOccurred()
             }
             
+            // TODO: cancel gestures more aggressively?
+            
             if newState == .pushing {
                 // usually happens when long hold is interrupted by pressure
                 self.popupLongHoldGesture.cancel()
@@ -494,6 +496,10 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             if newState == .opening || newState == .pushing {
                 // TODO: should this also be called when .open or .closing?
                 self.button.cancel()
+                self.button.isUserInteractionEnabled = false
+            }
+            else {
+                self.button.isUserInteractionEnabled = true
             }
         }
         
@@ -542,9 +548,19 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     
     // hooks up to outside scroll view gestures to cancel whenever panning or zooming occurs
     // AB: can't use scroll view's 'touchesShouldCancel(in view:)' b/c apparently gestures are not cancelled by this
-    func scrollViewCancellationHook(gesture: UIGestureRecognizer) {
-        if gesture.state == .began {
-            self.cancel()
+    func scrollViewCancellationHook(gesture: UIPanGestureRecognizer) {
+        // PERF: switching on .changed might make scrolling jittery b/c work done in 'cancel'
+        if gesture.state == .began || gesture.state == .changed {
+            // KLUDGE: when the user stops a moving scroll view, we want gestures to work; unfortunately,
+            // this immediately sends a .began state, as opposed to triggering after moving a small distance when
+            // scrolling from standstill, and one of the few ways to differentiate the two is to check the
+            // gesture's translation (which will be zero when stopping a moving scroll view until the activation
+            // radius is breached)
+            let translation = gesture.translation(in: nil)
+
+            if translation != CGPoint.zero {
+                self.cancel()
+            }
         }
     }
     

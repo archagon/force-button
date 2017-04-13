@@ -101,7 +101,7 @@ class DemoButton: ForceButton {
     required init() {
         DebugCounter.counter.increment(DemoButton.DebugDemoButtonsIdentifier, shouldLog: true)
         
-        super.init(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        super.init(frame: CGRect(x: 0, y: 0, width: 100, height: 100)) //arbitrary
         
         self.tBlock = { [weak self] (t: Double, threshhold: Double, bounds: CGRect, state: UIControlState, value: Bool) in
             guard let weakSelf = self else {
@@ -319,24 +319,6 @@ class DemoButton: ForceButton {
         return lowerPath
     }
     
-    // MARK: Debugging
-    
-    func debugStateBits(state: UIControlState) -> String {
-        var string = ""
-        
-        if state.contains(.depressed) {
-            string += "d"
-        }
-        if state.contains(.selected) {
-            string += "s"
-        }
-        if state.contains(.emphasized) {
-            string += "e"
-        }
-        
-        return "["+string+"]"
-    }
-    
     // MARK: Gradient Cache
     
     // TODO: PERF: clear cache on change of conversation
@@ -478,6 +460,22 @@ class DemoButton: ForceButton {
     }()
     
     // MARK: Debugging
+    
+    func debugStateBits(state: UIControlState) -> String {
+        var string = ""
+        
+        if state.contains(.depressed) {
+            string += "d"
+        }
+        if state.contains(.selected) {
+            string += "s"
+        }
+        if state.contains(.emphasized) {
+            string += "e"
+        }
+        
+        return "["+string+"]"
+    }
     
     private static var DebugDemoButtonsIdentifier: UInt = {
         let id: UInt = 2

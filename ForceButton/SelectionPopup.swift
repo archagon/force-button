@@ -5,9 +5,8 @@ fileprivate let UIArbitraryStartingFrame = CGRect(x: 0, y: 0, width: 100, height
 fileprivate let DebugDraw = false
 
 // TODO: 2x horizontal
-
-public protocol SelectionPopupDelegate {
-}
+// TODO: adjust curves when anchor touches edge
+// TODO: round sizes to nearest pixel
 
 public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     // MARK: Properties
