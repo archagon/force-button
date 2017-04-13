@@ -92,8 +92,8 @@
 		4E00FACD1DA5A64F00CD1D73 = {
 			isa = PBXGroup;
 			children = (
-				4E00FAD81DA5A64F00CD1D73 /* ForceButton */,
-				4EB5C1291E95C39D0046DE93 /* ForceButtonFramework */,
+				4E00FAD81DA5A64F00CD1D73 /* Demo */,
+				4EB5C1291E95C39D0046DE93 /* Framework */,
 				4E00FAD71DA5A64F00CD1D73 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -107,7 +107,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		4E00FAD81DA5A64F00CD1D73 /* ForceButton */ = {
+		4E00FAD81DA5A64F00CD1D73 /* Demo */ = {
 			isa = PBXGroup;
 			children = (
 				4E00FAD91DA5A64F00CD1D73 /* AppDelegate.swift */,
@@ -119,10 +119,11 @@
 				4E00FAE21DA5A64F00CD1D73 /* LaunchScreen.storyboard */,
 				4E00FAE51DA5A64F00CD1D73 /* Info.plist */,
 			);
+			name = Demo;
 			path = ForceButton;
 			sourceTree = "<group>";
 		};
-		4EB5C1291E95C39D0046DE93 /* ForceButtonFramework */ = {
+		4EB5C1291E95C39D0046DE93 /* Framework */ = {
 			isa = PBXGroup;
 			children = (
 				4E7685E21DA611E100AD0562 /* ForceButton.swift */,
@@ -134,6 +135,7 @@
 				4EB5C12A1E95C39D0046DE93 /* ForceButtonFramework.h */,
 				4EB5C12B1E95C39D0046DE93 /* Info.plist */,
 			);
+			name = Framework;
 			path = ForceButtonFramework;
 			sourceTree = "<group>";
 		};

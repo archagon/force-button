@@ -7,13 +7,17 @@ fileprivate let DebugDraw = false
 // TODO: 2x horizontal
 // TODO: adjust curves when anchor touches edge
 // TODO: round sizes to nearest pixel
+// NEXT: relevant gesture recognizers, state management, etc. should probably be in here, not in cell... but, then
+//       again, it all gets horrible and confusing quickly re: animations & gesture interactions, as in ForceButton
+// NEXT: fix r == 0 in second newton approximation
 
-public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
+// a barebones (but attractive) parametric peek/pop popup view with fluid item selection, controlled by outside gestures
+public class SelectionPopup: UIView {
     // MARK: Properties
     
     // general properties
     public var arrowDirection: UIPopoverArrowDirection = .down {
-        didSet { sizeToFit() }
+        didSet { relayout() }
     }
     public var selectedItem: Int? = nil {
         didSet {
@@ -28,7 +32,7 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             
                 if let item = selectedItem, item < self.selectionViews.count {
                     let views = self.selectionViews[item]
-                    views.selectionBox.backgroundColor = UIColor(hex: 0x007AFF)
+                    views.selectionBox.backgroundColor = self.selectionColor
                 }
             }
         }
@@ -67,7 +71,10 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             self.shape.color = newValue
         }
     }
+    public var selectionColor: UIColor = UIColor(hex: 0x007AFF)
     
+    // sizeToFit does not immediately update the layout, and we need view bounds to be correct for lots
+    // of stuff, so this should be used instead
     private func relayout() { sizeToFit(); setNeedsLayout(); }
 
     // layout properties
@@ -110,14 +117,14 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     }
     public var anchorFrame: CGRect {
         get {
-            sizeToFit()
+            relayout()
             let stubFrame = calculateStubFrame(boundingBox: self.bounds.size)
             return stubFrame
         }
     }
     public var contentsFrame: CGRect {
         get {
-            sizeToFit()
+            relayout()
             return self.contentsContainer.frame
         }
     }
@@ -135,13 +142,11 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         }
     }
     
-    // procedural properties -- 0 to 0.5 is expand, while 0.5 to 1 is popup
+    // procedural control: 0 to 0.5 is expand, while 0.5 to 1 is popup
     public var t: Double = 0 {
         didSet {
             let stubFrame = calculateStubFrame(boundingBox: self.bounds.size)
             generateShape(stubFrame: stubFrame)
-            
-            //self.gestureRecognizers!.first!.isEnabled = (t == 1)
             
             if self.maskContainer.layer.mask == nil {
                 let mask = CAShapeLayer()
@@ -198,6 +203,7 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         
         super.init(frame: frame)
         
+        // DEBUG:
         //self.backgroundColor = UIColor.yellow.withAlphaComponent(0.25)
         
         self.clipsToBounds = true
@@ -233,7 +239,7 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         selectionBox.layer.cornerRadius = 4
         selectionBox.backgroundColor = UIColor.clear
         selectionBox.tag = self.selectionViews.count - 1
-        selectionBox.addTarget(self, action: #selector(tappedItem), for: .touchUpInside)
+        //selectionBox.addTarget(self, action: #selector(tappedItem), for: .touchUpInside)
         selectionBox.isExclusiveTouch = true
         self.selectionViewContainer.addSubview(selectionBox)
         
@@ -242,13 +248,13 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         view.removeFromSuperview()
         self.selectionViewContainer.addSubview(view)
         
-        sizeToFit()
+        relayout()
     }
     
     public func changeSelection(_ withWorldPosition: CGPoint) {
         let touch = self.convert(withWorldPosition, from: nil)
         
-        // TODO: for now, finds matching item
+        // TODO: for now, finds matching item or nil, not closest item
         func findClosestItem(position: CGPoint) -> Int? {
             for (i, item) in self.selectionViews.enumerated() {
                 let frame = item.selectionBox.convert(item.selectionBox.bounds, to: self)
@@ -276,15 +282,10 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         }
     }
     
-    func tappedItem(button: UIButton) {
-        self.selectedItem = button.tag
-    }
-    
-    // MARK: Gestures
-    
-    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return true
-    }
+    // AB: no longer necessary w/gesture hookup
+    //func tappedItem(button: UIButton) {
+    //    self.selectedItem = button.tag
+    //}
     
     // MARK: Layout
     
@@ -297,9 +298,10 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     override public func layoutSubviews() {
         super.layoutSubviews()
         
+        // TODO: PERF: make sure views aren't layed out excessively, e.g. during animations
         //if previousSize == nil || self.bounds.size != previousSize! {
         if true {
-            print("laying out subviews")
+            //print("laying out subviews")
         
             // KLUDGE:
             let selectionViewContainerTransform = self.selectionViewContainer.transform
@@ -327,9 +329,7 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             
             layoutMainViews: do {
                 self.title.frame = layout.title
-                
                 self.contentsContainer.frame = layout.contentsContainer
-                
                 self.selectionViewContainer.frame.origin = layout.selectionContainer.origin
                 
                 self.frame.size = layout.boundingBox
@@ -360,8 +360,8 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
     
     func generateShape(stubFrame: CGRect) {
         enum Stage {
-            case expand
-            case bloom
+            case expand //expansion of starting frame into a bigger roundrect
+            case bloom //emergence of popup contents
         }
         
         // helpers
@@ -388,6 +388,13 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         let side = self.anchorPosition.side
         let clockwise = (side == 2 || side == 3)
         
+        // fixed layout properties
+        // TODO: move these to properties
+        let stubStartCornerRadius: CGFloat = 8
+        let stubEndCornerRadius: CGFloat = 12
+        let contentsCornerRadius: CGFloat = 16
+        let minStubSlopeClampedT: CGFloat = 0.5 //the slope angle and bezier can be clamped if too close to contents side
+        
         // fixed t ranges
         let stubExpandTRange: ClosedRange<CGFloat> = CGFloat(0.0)...CGFloat(0.5)
         let stubRemoveTopCornersTRange: ClosedRange<CGFloat> = CGFloat(stubExpandTRange.upperBound)...CGFloat(stubExpandTRange.upperBound + 0.05)
@@ -402,20 +409,13 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             }
         #endif
         
-        // fixed layout properties
-        // TODO: move these to properties
-        let stubStartCornerRadius: CGFloat = 8
-        let stubEndCornerRadius: CGFloat = 12
-        let contentsCornerRadius: CGFloat = 16
-        let minStubSlopeClampedT: CGFloat = 0.5 //the slope angle and bezier can be clamped if too close to contents side
-        
         // calculated t
-        var stubExpandedT = min(max((t - stubExpandTRange.lowerBound) / (stubExpandTRange.upperBound - stubExpandTRange.lowerBound), 0), 1)
+        let stubExpandedT = min(max((t - stubExpandTRange.lowerBound) / (stubExpandTRange.upperBound - stubExpandTRange.lowerBound), 0), 1)
         let stubRemoveTopCornersT = min(max((t - stubRemoveTopCornersTRange.lowerBound) / (stubRemoveTopCornersTRange.upperBound - stubRemoveTopCornersTRange.lowerBound), 0), 1)
         let stubSlopeT = min(max((t - stubSlopeTRange.lowerBound) / (stubSlopeTRange.upperBound - stubSlopeTRange.lowerBound), 0), 1)
         let contentsExpandT = min(max((t - contentsExpandTRange.lowerBound) / (contentsExpandTRange.upperBound - contentsExpandTRange.lowerBound), 0), 1)
         
-        // animation stage
+        // parametric stage
         let stage = (stubSlopeT > 0 ? Stage.bloom : Stage.expand)
         
         // stub frame
@@ -429,16 +429,22 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         // stub interpolated properties
         let stubTNonContentsCornerRadius = stubStartCornerRadius + (stubEndCornerRadius - stubStartCornerRadius) * stubExpandedT //lower corner
         let stubTContentsCornerRadius = stubTNonContentsCornerRadius + stubRemoveTopCornersT * (0 - stubTNonContentsCornerRadius) //upper corner in first animation
-        let stubTNonContentsCornerCircleStart: CGPoint
-        let stubTNonContentsCornerCircleEnd: CGPoint
+        let stubTNonContentsCornerCenterStart: CGPoint
+        let stubTNonContentsCornerCenterEnd: CGPoint
         if side == 0 {
-            stubTNonContentsCornerCircleStart = CGPoint(x: stubTFrame.minX + stubTNonContentsCornerRadius, y: stubTFrame.minY + stubTNonContentsCornerRadius)
-            stubTNonContentsCornerCircleEnd = CGPoint(x: stubTFrame.maxX - stubTNonContentsCornerRadius, y: stubTFrame.minY + stubTNonContentsCornerRadius)
+            stubTNonContentsCornerCenterStart = CGPoint(x: stubTFrame.minX + stubTNonContentsCornerRadius, y: stubTFrame.minY + stubTNonContentsCornerRadius)
+            stubTNonContentsCornerCenterEnd = CGPoint(x: stubTFrame.maxX - stubTNonContentsCornerRadius, y: stubTFrame.minY + stubTNonContentsCornerRadius)
         }
         else {
-            stubTNonContentsCornerCircleStart = CGPoint(x: stubTFrame.minX + stubTNonContentsCornerRadius, y: stubTFrame.maxY - stubTNonContentsCornerRadius)
-            stubTNonContentsCornerCircleEnd = CGPoint(x: stubTFrame.maxX - stubTNonContentsCornerRadius, y: stubTFrame.maxY - stubTNonContentsCornerRadius)
+            stubTNonContentsCornerCenterStart = CGPoint(x: stubTFrame.minX + stubTNonContentsCornerRadius, y: stubTFrame.maxY - stubTNonContentsCornerRadius)
+            stubTNonContentsCornerCenterEnd = CGPoint(x: stubTFrame.maxX - stubTNonContentsCornerRadius, y: stubTFrame.maxY - stubTNonContentsCornerRadius)
         }
+        
+        // AB: The diagonal slopes on the sides of the anchor have two modes. In the first mode, the sides of the 
+        // (expanded) anchor are far enough away from the sides of the (expanded) contents box to pass the minimum angle
+        // requirement. These have a smooth bezier curve. In the second mode, the sides of the (expanded) contents
+        // box are too close to the sides of the (expanded) anchor. In that case, the corners of the anchor are directly
+        // connected to the corners of the contents box.
         
         // slope derived properties (general)
         var slopeLCannotCurve: Bool = false
@@ -462,9 +468,11 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             let slopeLFarthestPossibleT: CGFloat
             let slopeRFarthestPossibleT: CGFloat
             
+            // what angle are the lines connecting the anchor's corners to the contents's corners?
             calculateMaxSlopeExtent: do {
                 let stubEndFrame = stubFrame
                 
+                // newtonian approximation, factoring in parametric expansion of bezier radius along with increasing angle
                 distanceApproximation: do {
                     let slopeLFarthestPossibleXPointWithoutBezier = min(contentsCornerRadius, stubFrame.minX)
                     let slopeRFarthestPossibleXPointWithoutBezier = max(contentsSize.width - contentsCornerRadius, stubFrame.maxX)
@@ -503,21 +511,24 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             
             // TODO: "slopeL" to "slopeStart"
             
+            // are the max angles past the minimum?
             slopeLCannotCurve = slopeLFarthestPossibleT < minStubSlopeClampedT
             slopeRCannotCurve = slopeRFarthestPossibleT < minStubSlopeClampedT
+            
             let slopeLT = (slopeLCannotCurve ? 0 : stubSlopeT * min(max(slopeLFarthestPossibleT, 0), 1))
             let slopeRT = (slopeRCannotCurve ? 0 : stubSlopeT * min(max(slopeRFarthestPossibleT, 0), 1))
             
             slopeAngleL = slopeLT * (maximumSlopeAngle * ((2 * CGFloat.pi) / 360.0))
             slopeAngleR = slopeRT * (maximumSlopeAngle * ((2 * CGFloat.pi) / 360.0))
+            
             let stubTSlopeContentsBezierRadiusL = maximumSlopeBezierRadius * slopeLT
             let stubTSlopeContentsBezierRadiusR = maximumSlopeBezierRadius * slopeRT
             
             // stub corner/slope key properties
             // no need to add pi/2 b/c measured from right, not from top
             // end = connection to lower circle, start = connection to contents box
-            slopeLEnd = circlePoint(c: stubTNonContentsCornerCircleStart, r: stubTNonContentsCornerRadius, a: -slopeAngleL + CGFloat.pi, clockwise: clockwise)
-            slopeREnd = circlePoint(c: stubTNonContentsCornerCircleEnd, r: stubTNonContentsCornerRadius, a: slopeAngleR, clockwise: clockwise)
+            slopeLEnd = circlePoint(c: stubTNonContentsCornerCenterStart, r: stubTNonContentsCornerRadius, a: -slopeAngleL + CGFloat.pi, clockwise: clockwise)
+            slopeREnd = circlePoint(c: stubTNonContentsCornerCenterEnd, r: stubTNonContentsCornerRadius, a: slopeAngleR, clockwise: clockwise)
             if side == 0 {
                 let slopeLHeight = -slopeLEnd.y + stubTFrame.maxY
                 let slopeRHeight = -slopeREnd.y + stubTFrame.maxY
@@ -546,8 +557,7 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
             let slopeRVectorUpperRadius = CGPoint(x: slopeRVectorNorm.x * stubTSlopeContentsBezierRadiusR,
                                                   y: slopeRVectorNorm.y * stubTSlopeContentsBezierRadiusR)
             
-            // QQQ: not the best way to do this
-            // NEXT: side adjustment
+            // TODO: not the best way to do this -- corner-connecting slopes have fake values for these properties
             if slopeLCannotCurve {
                 slopeLStartCurveStart = CGPoint(x: stubFrame.minX, y: stubFrame.minY)
                 slopeLStartCurveEnd = slopeLStartCurveStart
@@ -558,7 +568,6 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
                                               y: slopeLEnd.y + slopeLVector.y - slopeLVectorUpperRadius.y)
                 
             }
-            
             if slopeRCannotCurve {
                 slopeRStartCurveStart = CGPoint(x: stubFrame.maxX, y: stubFrame.minY)
                 slopeRStartCurveEnd = slopeRStartCurveStart
@@ -604,27 +613,26 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
         let contentsTStubStartCornerRadius = min(contentsTMaxCornerRadius, contentsTStubStartOverhang)
         let contentsTStubEndCornerRadius = min(contentsTMaxCornerRadius, contentsTStubEndOverhang)
         
-        var tempOverflowAngleL: CGFloat = 0
-        var tempOverflowAngleR: CGFloat = 0
-        
         cornerConnectionApproximation: do {
-            // adjusted to always be UR of stub corners
-            let contentsStubCornerStart: CGPoint
-            let contentsStubCornerEnd: CGPoint
+            // AB: technically, none of this math has to happen unless slopeLCannotCurve/slopeRCannotCurve are
+            // true... but meh, conditionals complicate things and the math is simple enough
             
+            // adjusted to always be UR of stub corners
+            let contentsStubCornerCenterStart: CGPoint
+            let contentsStubCornerCenterEnd: CGPoint
             if side == 0 {
-                contentsStubCornerStart = CGPoint(
-                    x: stubTNonContentsCornerCircleStart.x + (stubTNonContentsCornerCircleStart.x - (contentsTFrame.minX + contentsTStubStartCornerRadius)),
-                    y: stubTNonContentsCornerCircleStart.y - (-stubTNonContentsCornerCircleStart.y + (contentsTFrame.minY + contentsTStubStartCornerRadius)))
-                contentsStubCornerEnd = CGPoint(
+                contentsStubCornerCenterStart = CGPoint(
+                    x: stubTNonContentsCornerCenterStart.x + (stubTNonContentsCornerCenterStart.x - (contentsTFrame.minX + contentsTStubStartCornerRadius)),
+                    y: stubTNonContentsCornerCenterStart.y - (-stubTNonContentsCornerCenterStart.y + (contentsTFrame.minY + contentsTStubStartCornerRadius)))
+                contentsStubCornerCenterEnd = CGPoint(
                     x: contentsTFrame.maxX - contentsTStubEndCornerRadius,
-                    y: stubTNonContentsCornerCircleEnd.y - (-stubTNonContentsCornerCircleEnd.y + (contentsTFrame.minY + contentsTStubEndCornerRadius)))
+                    y: stubTNonContentsCornerCenterEnd.y - (-stubTNonContentsCornerCenterEnd.y + (contentsTFrame.minY + contentsTStubEndCornerRadius)))
             }
             else {
-                contentsStubCornerStart = CGPoint(
-                    x: stubTNonContentsCornerCircleStart.x + (stubTNonContentsCornerCircleStart.x - (contentsTFrame.minX + contentsTStubStartCornerRadius)),
+                contentsStubCornerCenterStart = CGPoint(
+                    x: stubTNonContentsCornerCenterStart.x + (stubTNonContentsCornerCenterStart.x - (contentsTFrame.minX + contentsTStubStartCornerRadius)),
                     y: contentsTFrame.maxY - contentsTStubStartCornerRadius)
-                contentsStubCornerEnd = CGPoint(
+                contentsStubCornerCenterEnd = CGPoint(
                     x: contentsTFrame.maxX - contentsTStubEndCornerRadius,
                     y: contentsTFrame.maxY - contentsTStubEndCornerRadius)
             }
@@ -652,20 +660,19 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
                 return fmodpos(a: angle, b: CGFloat.pi * 2)
             }
             
-            //NEXT: reflect along axis
-            //NEXT: shortcut for r == 0
-            
-            let lAngleU = newton(function: ffx(stubTNonContentsCornerCircleStart, contentsStubCornerStart, stubCornerRadius, contentsCornerRadiusL),
-                                 derivative: ffdx(stubTNonContentsCornerCircleStart, contentsStubCornerStart, stubCornerRadius, contentsCornerRadiusL),
+            // in case of "mode 2" (corner-to-corner) connection, calculate angle between the two rounded corners
+            let lAngleU = newton(function: ffx(stubTNonContentsCornerCenterStart, contentsStubCornerCenterStart, stubCornerRadius, contentsCornerRadiusL),
+                                 derivative: ffdx(stubTNonContentsCornerCenterStart, contentsStubCornerCenterStart, stubCornerRadius, contentsCornerRadiusL),
                                  transform: cleanup,
                                  x0: CGFloat.pi/4)
-            let rAngleU = newton(function: ffx(stubTNonContentsCornerCircleEnd, contentsStubCornerEnd, stubCornerRadius, contentsCornerRadiusR),
-                                 derivative: ffdx(stubTNonContentsCornerCircleEnd, contentsStubCornerEnd, stubCornerRadius, contentsCornerRadiusR),
+            let rAngleU = newton(function: ffx(stubTNonContentsCornerCenterEnd, contentsStubCornerCenterEnd, stubCornerRadius, contentsCornerRadiusR),
+                                 derivative: ffdx(stubTNonContentsCornerCenterEnd, contentsStubCornerCenterEnd, stubCornerRadius, contentsCornerRadiusR),
                                  transform: cleanup,
                                  x0: CGFloat.pi/4)
             
-//            guard let lAngle = lAngleU else { assert(false); return; }
-//            guard let rAngle = rAngleU else { assert(false); return; }
+            var tempOverflowAngleL: CGFloat = 0
+            var tempOverflowAngleR: CGFloat = 0
+            
             if let lAngle = lAngleU {
                 tempOverflowAngleL = lAngle
             }
@@ -673,17 +680,16 @@ public class SelectionPopup: UIView, UIGestureRecognizerDelegate {
                 tempOverflowAngleR = rAngle
             }
             
-            // QQQ: changing shit around
-            do {
+            commit: do {
                 if slopeLCannotCurve {
                     slopeAngleL = tempOverflowAngleL
-                    slopeLStart = circlePoint(c: contentsStubCornerStart, r: contentsTStubStartCornerRadius, a: -slopeAngleL + CGFloat.pi, clockwise: clockwise)
-                    slopeLEnd = circlePoint(c: stubTNonContentsCornerCircleStart, r: stubTNonContentsCornerRadius, a: -slopeAngleL + CGFloat.pi, clockwise: clockwise)
+                    slopeLStart = circlePoint(c: contentsStubCornerCenterStart, r: contentsTStubStartCornerRadius, a: -slopeAngleL + CGFloat.pi, clockwise: clockwise)
+                    slopeLEnd = circlePoint(c: stubTNonContentsCornerCenterStart, r: stubTNonContentsCornerRadius, a: -slopeAngleL + CGFloat.pi, clockwise: clockwise)
                 }
                 if slopeRCannotCurve {
                     slopeAngleR = tempOverflowAngleR
-                    slopeRStart = circlePoint(c: contentsStubCornerEnd, r: contentsTStubEndCornerRadius, a: slopeAngleR, clockwise: clockwise)
-                    slopeREnd = circlePoint(c: stubTNonContentsCornerCircleEnd, r: stubTNonContentsCornerRadius, a: slopeAngleR, clockwise: clockwise)
+                    slopeRStart = circlePoint(c: contentsStubCornerCenterEnd, r: contentsTStubEndCornerRadius, a: slopeAngleR, clockwise: clockwise)
+                    slopeREnd = circlePoint(c: stubTNonContentsCornerCenterEnd, r: stubTNonContentsCornerRadius, a: slopeAngleR, clockwise: clockwise)
                 }
             }
         }
@@ -1204,12 +1210,12 @@ extension SelectionPopup {
     }
 }
 
-// MARK: - Helpers -
+// MARK: - Helpers
 
 fileprivate func newton(
     function: (CGFloat)->CGFloat,
     derivative: (CGFloat)->CGFloat,
-    transform: ((CGFloat)->CGFloat)? = nil, //if root is wrong, maybe massage it to get actual desired root?
+    transform: ((CGFloat)->CGFloat)? = nil, //if root is not the one we want, maybe massage it to get actual desired root?
     x0: CGFloat, //initial estimate
     tolerance: Int = 5, //accuracy digits
     maxIterations: UInt = 15) -> CGFloat?

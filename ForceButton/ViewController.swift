@@ -11,8 +11,10 @@ import AudioToolbox
 import ForceButtonFramework
 
 // NEXT:
-//  * clean up force button w/gesture code
-//      * force button should not be able to start during scrolling
+//  * clean up force button & popup
+//  * correct design of t/gestures/state in force button
+//  * move popup gestures/state to class
+//  * handle NEXT/imprtant TODOs
 //  * cleanup for non-force devices
 //  * check memory
 

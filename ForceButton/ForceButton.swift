@@ -11,6 +11,7 @@ import UIKit.UIGestureRecognizerSubclass
 
 // TODO: pressure should check within radius
 
+// a parametric button with (optional) pressure control and state animations
 open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // AB: There are two types of state to track here. First, there's the value state — on or off. This is stored
     // as a separate property and causes the button to change its display state. The second is the display
@@ -19,7 +20,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     public static let StandardTapForce: Double = 0.2 //0.15 according to Apple docs, but works slightly better for this case
     
-    // MARK: - Properties -
+    // MARK: Properties
     
     // MARK: Public Custom Properties
     
@@ -348,7 +349,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     private var hapticGenerator: UIImpactFeedbackGenerator!
     private var lightHapticGenerator: UIImpactFeedbackGenerator!
     
-    // MARK: - Lifecycle -
+    // MARK: Lifecycle
     
     deinit {
         DebugCounter.counter.decrement(ForceButton.DebugForceButtonsIdentifier)
@@ -396,7 +397,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         self.deepTouchGestureRecognizer.cancel()
     }
     
-    // MARK: - Gestures -
+    // MARK: Gestures
     
     private func pointInsideTapBounds(_ p: CGPoint) -> Bool {
         return !(p.x >= self.bounds.size.width + cancellationThreshhold ||
@@ -604,7 +605,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         }
     }
     
-    // MARK: - Rendering -
+    // MARK: Rendering
 
     override open func draw(_ rect: CGRect) {
         if let block = renderBlock {
@@ -665,32 +666,9 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     }()
 }
 
-// MARK: - Helpers -
+// MARK: - Helpers
 
 // MARK: Extensions
-
-extension UIControlState {
-    public static func customMask(n: Int) -> UIControlState {
-        var applicationMask: UIControlState?
-        
-        var applicationBits = UIControlState.application.rawValue
-        var foundBits = 0
-        for i: UInt in 0..<32 {
-            if (applicationBits & 0x1) > 0 {
-                if foundBits == n {
-                    applicationMask = UIControlState(rawValue: (UIControlState.application.rawValue & (0x1 << i)))
-                    break
-                }
-                foundBits += 1
-            }
-            applicationBits >>= 1
-        }
-        
-        assert(applicationMask != nil, "could not find any free application mask bits")
-        
-        return applicationMask!
-    }
-}
 
 // AB: not using .highlighted because highlights are automatic and we need manual control
 extension UIControlState {

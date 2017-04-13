@@ -16,6 +16,29 @@ extension UIControlState: Hashable {
     }
 }
 
+extension UIControlState {
+    public static func customMask(n: Int) -> UIControlState {
+        var applicationMask: UIControlState?
+        
+        var applicationBits = UIControlState.application.rawValue
+        var foundBits = 0
+        for i: UInt in 0..<32 {
+            if (applicationBits & 0x1) > 0 {
+                if foundBits == n {
+                    applicationMask = UIControlState(rawValue: (UIControlState.application.rawValue & (0x1 << i)))
+                    break
+                }
+                foundBits += 1
+            }
+            applicationBits >>= 1
+        }
+        
+        assert(applicationMask != nil, "could not find any free application mask bits")
+        
+        return applicationMask!
+    }
+}
+
 extension UIColor {
     convenience public init(hex: UInt) {
         let b = ((hex >> 0) & 0xff)
