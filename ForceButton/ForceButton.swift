@@ -35,7 +35,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     public var supportsPressure: Bool = true {
         didSet {
             cancel()
-            traitCollectionDidChange(self.traitCollection)
+            traitCollectionDidChange(self.traitCollection) //KLUDGE: ...but works fine
         }
     }
     
@@ -48,29 +48,35 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // MARK: Public State Properties
     
-    // AB: not my favorite way of doing things, but oh well
-    // WARNING: should only be accessed by subclasses that know what they're doing!
-    public var disableAutomaticAnimations: Bool = false
+    // setting various properties automatically animates the view, so we need this override
+    public func performAnimableChanges(animated: Bool, _ function: (Bool)->()) {
+        let previousDisabledAnimations = self._disableAutomaticAnimations
+        self._disableAutomaticAnimations = !animated
+        function(animated)
+        self._disableAutomaticAnimations = previousDisabledAnimations
+    }
+    private var _disableAutomaticAnimations: Bool = false //should not be touched by anything other than the above method
+    public var disableAutomaticAnimations: Bool { return _disableAutomaticAnimations }
     
     public var on: Bool = false {
         didSet {
             // KLUDGE: prevents isSelected from overwriting isDepressed; also causes update to be called a few extra times
             let oldState = self.state
             let oldT = self.t
+            let onVal = on
             
-            let previousDisabledAnimations = self.disableAutomaticAnimations
-            self.disableAutomaticAnimations = true
-            self.isDepressed = false
-            self.isSelected = on
-            self.disableAutomaticAnimations = previousDisabledAnimations
+            performAnimableChanges(animated: false) { [unowned self] (animated: Bool) in
+                self.isDepressed = false
+                self.isSelected = onVal
+            }
             
             self.updateDisplayState(oldValue: oldState, oldT: oldT, animated: !self.disableAutomaticAnimations)
         }
     }
     public func setOn(_ on: Bool, animated: Bool) {
-        self.disableAutomaticAnimations = !animated
-        self.on = on
-        self.disableAutomaticAnimations = false
+        performAnimableChanges(animated: animated) { [unowned self] (animated: Bool) in
+            self.on = on
+        }
     }
     
     public var isDepressed: Bool = false {
@@ -319,6 +325,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     private var panGestureRecognizer: SimpleMovementGestureRecognizer!
     private var deepTouchGestureRecognizer: SimpleDeepTouchGestureRecognizer!
+    
     private var is3dTouching: Bool {
         get {
             if deepTouchGestureRecognizer.isEnabled {
@@ -585,17 +592,16 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 else {
                     // TODO: make sure this is actually correct -- fake state to ensure animation; prolly need something else,
                     // like animation for going from same state to same state
-                    self.disableAutomaticAnimations = true
-                    let oldState: UIControlState
+                    
+                    var oldState: UIControlState = []
                     let oldT = self.t
-                    stateStuff: do {
+                    
+                    self.performAnimableChanges(animated: false) { [unowned self] _ in
                         self.isSelected = !startingConditions.value
                         oldState = self.state
-                        
                         self.isSelected = startingConditions.value
                         self.isDepressed = false
                     }
-                    self.disableAutomaticAnimations = false
                     
                     updateDisplayState(oldValue: oldState, oldT: oldT, animated: true)
                 }

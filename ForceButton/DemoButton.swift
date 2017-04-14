@@ -21,10 +21,9 @@ class DemoButton: ForceButton {
         }
     }
     func setIsEmphasized(_ val: Bool, animated: Bool=true) {
-        let oldState = self.disableAutomaticAnimations
-        self.disableAutomaticAnimations = !animated
-        self.isEmphasized = val
-        self.disableAutomaticAnimations = oldState
+        self.performAnimableChanges(animated: animated) { [unowned self] _ in
+            self.isEmphasized = val
+        }
     }
     
     override var statesContributingToAppearance: [UIControlState:Selector] {
