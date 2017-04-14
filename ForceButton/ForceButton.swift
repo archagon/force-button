@@ -276,9 +276,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         //print("updating display state from \(debugStateBits(oldValue))->\(debugStateBits(newValue)) (\(oldT))")
         
         let baseT: Double = oldT
-        guard
-            let targetT: Double = t(forState: newValue)
-            else {
+        guard let targetT: Double = t(forState: newValue) else {
             assert(false, "unable to handle state transition from \(oldValue.rawValue) to \(newValue.rawValue)")
             return
         }
@@ -461,6 +459,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     }
     
     // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
+    // these should only be modified by the below gesture recognizer actions
     private var _tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
     private var _deepTouchStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
     private var deepTouchMode: Bool {
@@ -515,7 +514,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 let currentOn = self.isOn
                 let originalOn = startingConditions.value
                 
-                // this also takes care of animations
+                // this also takes care of animations and state changes
                 self.isOn = originalOn
                 if currentOn != originalOn { self.sendActions(for: .valueChanged) }
                 
@@ -538,6 +537,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             // instead of setting up a gesture dependency graph; deep touch gesture replaces pan gesture when active
             self.regularTouchGestureRecognizer.cancel()
             
+            // NOTE: the above calls the cancel action immediately, so cancellation animations will still be stopped
             self.animation = nil
             
             fallthrough
@@ -588,16 +588,24 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                     }
                 }
             }
+        // NEXT: unravel this stuff
         case .ended:
             //print("deep touch gesture recognizer ended")
             
             if let startingConditions = self._deepTouchStartingConditions {
+                
                 // AB: force animation if we're on the wrong t, even if the state is correct; happens on 'off'
                 // KLUDGE: we don't do this on 'on' b/c 'on' starts ignoring the gesture after triggering
-                if !self.isOn && self.t != t(forState: self.state) {
-                    let value: Bool = startingConditions.value
-                    let oldState: UIControlState = (value ? UIControlState.selected : UIControlState.normal)
-                    updateDisplayState(oldValue: oldState, newValue: self.state, oldT: self.t, animated: true, forced: true)
+//                if !self.isOn && self.t != t(forState: self.state) {
+//                    let value: Bool = startingConditions.value
+//                    let oldState: UIControlState = (value ? UIControlState.selected : UIControlState.normal)
+//                    updateDisplayState(oldValue: oldState, newValue: self.state, oldT: self.t, animated: true, forced: true)
+//                }
+                
+                // pressure gesture doesn't change 'on' state when ended, so we can't rely on implicit animations
+                // KLUDGE: we don't do this on 'on' b/c we want the animation to keep playing
+                if !self.isOn {
+                    updateDisplayState(oldValue: self.state, newValue: self.state, oldT: self.t, animated: true, forced: true)
                 }
                 
                 self._deepTouchStartingConditions = nil
@@ -612,7 +620,6 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             if let startingConditions = self._deepTouchStartingConditions {
                 if self.isOn != startingConditions.value {
                     self.isOn = startingConditions.value
-                    
                     self.sendActions(for: .valueChanged)
                 }
                 else {
