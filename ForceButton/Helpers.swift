@@ -124,7 +124,7 @@ public class BezierBackgroundView: UIView {
 public class DebugCounter {
     public static let counter = DebugCounter()
     
-    public var debugging: Bool = false
+    public var debugging: Bool = true
     
     public func register(id: UInt, name: String) {
         assert(identifiers[id] == nil, "\(name): already registered as \(getName(id))")
@@ -155,7 +155,7 @@ public class DebugCounter {
         for count in counts {
             print("‣ \(getName(count.key)): \(count.value)")
         }
-        print("--------END--------")
+        print("--------END--------\n")
     }
     
     private func getName(_ id: UInt) -> String {

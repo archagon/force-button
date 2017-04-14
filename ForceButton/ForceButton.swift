@@ -342,8 +342,9 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // MARK: Touch & Gesture Recognition
     
-    private var regularTouchGestureRecognizer: SimpleMovementGestureRecognizer!
-    private var deepTouchGestureRecognizer: SimpleDeepTouchGestureRecognizer!
+    // gestures -- as with UIScrollView, you can add these to a different view if you want
+    public var regularTouchGestureRecognizer: SimpleMovementGestureRecognizer!
+    public var deepTouchGestureRecognizer: SimpleDeepTouchGestureRecognizer!
     
     private var is3dTouching: Bool {
         get {

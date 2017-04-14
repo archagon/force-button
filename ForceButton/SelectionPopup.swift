@@ -7,9 +7,17 @@ fileprivate let DebugDraw = false
 // TODO: 2x horizontal
 // TODO: adjust curves when anchor touches edge
 // TODO: round sizes to nearest pixel
-// NEXT: relevant gesture recognizers, state management, etc. should probably be in here, not in cell... but, then
-//       again, it all gets horrible and confusing quickly re: animations & gesture interactions, as in ForceButton
+// TODO: pressure should check within radius
 // NEXT: fix r == 0 in second newton approximation
+
+public protocol SelectionPopupDelegate: class {
+    func selectionPopupDidSelectItem(popup: SelectionPopup, item: Int)
+    func selectionPopupShouldBegin(popup: SelectionPopup) -> Bool
+    func selectionPopupShouldLayout(popup: SelectionPopup)
+    func selectionPopupDidOpen(popup: SelectionPopup)
+    func selectionPopupDidClose(popup: SelectionPopup)
+    func selectionPopupDidChangeState(popup: SelectionPopup, state: SelectionPopup.PopupState)
+}
 
 // a barebones (but attractive) parametric peek/pop popup view with fluid item selection, controlled by outside gestures
 public class SelectionPopup: UIView {
@@ -171,6 +179,29 @@ public class SelectionPopup: UIView {
     
     // hardware stuff
     var selectionFeedback: UISelectionFeedbackGenerator
+    var popFeedback: UIImpactFeedbackGenerator
+    
+    // delegate
+    public weak var delegate: SelectionPopupDelegate?
+    
+    // gestures -- as with UIScrollView, you can add these to a different view if you want
+    public var popupPressureGesture: SimpleDeepTouchGestureRecognizer
+    public var popupSelectionGesture: SimpleMovementGestureRecognizer
+    public var popupLongHoldGesture: UILongPressGestureRecognizer
+    
+    // popup state
+    public enum PopupState {
+        case closed
+        case pushing
+        case opening
+        case open
+        case closing
+    }
+    
+    // popup state
+    var popupOpenAnimation: Animation?
+    var popupCloseAnimation: Animation?
+    public internal(set) var popupState: PopupState = .closed
     
     // MARK: Lifecycle
     
@@ -196,10 +227,15 @@ public class SelectionPopup: UIView {
         self.title = title
         
         self.selectionFeedback = UISelectionFeedbackGenerator()
+        self.popFeedback = UIImpactFeedbackGenerator(style: .heavy)
         
         if DebugDraw {
             self.debugLayer = UIView()
         }
+        
+        self.popupPressureGesture = SimpleDeepTouchGestureRecognizer()
+        self.popupSelectionGesture = SimpleMovementGestureRecognizer()
+        self.popupLongHoldGesture = UILongPressGestureRecognizer()
         
         super.init(frame: frame)
         
@@ -222,6 +258,20 @@ public class SelectionPopup: UIView {
             title.textColor = UIColor.white
             title.textAlignment = .center
         }
+        
+        gestureSetup: do {
+            self.popupPressureGesture.addTarget(self, action: #selector(popupDeepTouch))
+            self.popupSelectionGesture.addTarget(self, action: #selector(popupSelection))
+            self.popupLongHoldGesture.addTarget(self, action: #selector(popupLongPress))
+            self.popupPressureGesture.delegate = self
+            self.popupSelectionGesture.delegate = self
+            self.popupLongHoldGesture.delegate = self
+            self.addGestureRecognizer(self.popupPressureGesture)
+            self.addGestureRecognizer(self.popupSelectionGesture)
+            self.addGestureRecognizer(self.popupLongHoldGesture)
+        }
+        
+        hide()
     }
     
     required public init?(coder aDecoder: NSCoder) {
@@ -1207,6 +1257,354 @@ extension SelectionPopup {
                                height: rowHeight * CGFloat(rows) + itemMargin * CGFloat(max(rows - 1, 0)))
         
         return (totalSize, items)
+    }
+}
+
+// gestures
+extension SelectionPopup: UIGestureRecognizerDelegate {
+    // MARK: Gesture Actions
+    
+    func popupDeepTouch(gesture: SimpleDeepTouchGestureRecognizer) {
+        // AB: gestures don't do anything when open(ing), but work at all other times
+        if self.popupState == .open || self.popupState == .opening {
+            return
+        }
+        
+        let gestureOver = !(gesture.state == .began || gesture.state == .changed)
+        
+        if gestureOver  {
+            close()
+        }
+        else {
+            open(t: gesture.t)
+        }
+    }
+    
+    func popupLongPress(gesture: UILongPressGestureRecognizer) {
+        // AB: gestures don't do anything when open(ing), but work at all other times
+        if self.popupState == .open || self.popupState == .opening {
+            return
+        }
+        
+        let gestureRecognized = (gesture.state == .began || gesture.state == .recognized)
+        
+        if gestureRecognized {
+            open()
+        }
+    }
+    
+    func popupSelection(gesture: SimpleMovementGestureRecognizer) {
+        if self.popupState != .open {
+            return
+        }
+        
+        let gestureOver = !(gesture.state == .began || gesture.state == .changed)
+        
+        if gestureOver {
+            if let item = self.selectedItem {
+                self.delegate?.selectionPopupDidSelectItem(popup: self, item: item)
+                close()
+            }
+        }
+        else {
+            self.changeSelection(gesture.location(in: nil))
+        }
+    }
+    
+    // MARK: Gesture Delegate
+    
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        if (gestureRecognizer == self.popupLongHoldGesture && otherGestureRecognizer == self.popupPressureGesture) ||
+            (gestureRecognizer == self.popupPressureGesture && otherGestureRecognizer == self.popupLongHoldGesture)
+        {
+            // AB: this is more correct than calling cancel() whenever one or the other gesture is recognized,
+            // but it's also more limiting... works for now, though, since pressure gesture has starting point
+            return false
+        }
+        else {
+            return true
+        }
+    }
+}
+
+// state
+extension SelectionPopup {
+    // MARK: State Management
+    
+    public func open(t: Double? = nil) {
+        if let t = t {
+            let tStart: Double = 0.3
+            let tEnd: Double = 0.75
+            
+            let scaledT: Double
+            
+            if t >= tEnd {
+                scaledT = 0.5 + (t - tEnd) / (1 - tEnd) * 0.5
+            }
+            else if t >= tStart && t < tEnd {
+                scaledT = ((t - tStart) / (tEnd - tStart)) * 0.5
+            }
+            else {
+                scaledT = 0
+            }
+            
+            if t >= tEnd {
+                switchPopupState(.opening)
+            }
+            else {
+                switchPopupState(.pushing)
+            }
+            
+            if self.popupState == .pushing {
+                self.t = scaledT
+            }
+        }
+        else {
+            switchPopupState(.opening)
+        }
+    }
+    
+    public func close() {
+        switchPopupState(.closing)
+    }
+    
+    // manages popup t state, animations, and also a few delegate calls; does not deal with gestures, hardware, etc.
+    // NOTE: not all states can switch to all other states
+    private func switchPopupState(_ state: PopupState) {
+        // AB: these helper functions capture self, but do not escape the outer method, and thus there is no retain loop
+        
+        func addPopupCloseAnimationIfNeeded() {
+            if self.popupCloseAnimation == nil {
+                self.popupCloseAnimation = Animation(duration: 0.1, delay: 0, start: CGFloat(self.t), end: 0, block: {
+                    [weak self] (t: CGFloat, tScaled: CGFloat, val: CGFloat) in
+                    
+                    guard let weakSelf = self else {
+                        return
+                    }
+                    
+                    weakSelf.t = Double(val)
+                    
+                    if t >= 1 {
+                        weakSelf.switchPopupState(.closed)
+                    }
+                    }, tFunc: { (t: Double)->Double in
+                        // compensating for 0.5/0.5 split in popup parametric modes
+                        let scaledT: Double
+                        let divider: Double = 0.6
+                        
+                        if t <= divider {
+                            scaledT = 0.5 * (t / divider)
+                        }
+                        else {
+                            scaledT = 0.5 + 0.5 * ((t - divider) / (1 - divider))
+                        }
+                        
+                        return linear(scaledT)
+                })
+                self.popupCloseAnimation?.start()
+            }
+        }
+        
+        func addPopupOpenAnimationIfNeeded() {
+            if self.popupOpenAnimation == nil {
+                self.popupOpenAnimation = Animation(duration: 0.25, delay: 0, start: 0.5, end: 1, block: {
+                    [weak self] (t: CGFloat, tScaled: CGFloat, val: CGFloat) in
+                    
+                    guard let weakSelf = self else {
+                        return
+                    }
+                    
+                    weakSelf.t = Double(val)
+                    
+                    if t >= 1 {
+                        weakSelf.switchPopupState(.open)
+                    }
+                    }, tFunc: easeOutCubic)
+                self.popupOpenAnimation?.start()
+            }
+        }
+        
+        let originalState = self.popupState
+        var newState: PopupState = state
+        
+        // early return
+        switch originalState {
+        case .closed:
+            switch newState {
+            case .closed:
+                fallthrough
+            case .closing:
+                return
+            default:
+                break
+            }
+        case .pushing:
+            switch newState {
+            case .pushing:
+                return
+            default:
+                break
+            }
+        case .opening:
+            switch newState {
+            case .pushing:
+                fallthrough
+            case .opening:
+                return
+            default:
+                break
+            }
+        case .open:
+            switch newState {
+            case .pushing:
+                fallthrough
+            case .opening:
+                fallthrough
+            case .open:
+                return
+            default:
+                break
+            }
+        case .closing:
+            switch newState {
+            default:
+                break
+            }
+        }
+        
+        // make sure popup is allowed to be opened
+        if originalState == .closed {
+            if !(self.delegate?.selectionPopupShouldBegin(popup: self) ?? true) {
+                return
+            }
+            else {
+                self.delegate?.selectionPopupShouldLayout(popup: self)
+            }
+        }
+        
+        // adjust state
+        switch newState {
+        case .opening:
+            if self.t == 1 {
+                newState = .open
+            }
+        case .closing:
+            if self.t == 0 {
+                newState = .closed
+            }
+        default:
+            break
+        }
+        
+        //print("changing state from \(originalState) to \(newState)")
+        
+        switch newState {
+        case .closed:
+            hide()
+            self.popupOpenAnimation = nil
+            self.popupCloseAnimation = nil
+            self.delegate?.selectionPopupDidClose(popup: self)
+        case .pushing:
+            show()
+            self.cancel()
+            self.popupOpenAnimation = nil
+            self.popupCloseAnimation = nil
+        case .opening:
+            show()
+            self.cancel()
+            self.popupCloseAnimation = nil
+            addPopupOpenAnimationIfNeeded()
+        case .open:
+            show()
+            self.popupOpenAnimation = nil
+            self.popupCloseAnimation = nil
+            self.t = 1
+            self.delegate?.selectionPopupDidOpen(popup: self)
+        case .closing:
+            show()
+            self.cancel()
+            self.popupOpenAnimation = nil
+            addPopupCloseAnimationIfNeeded()
+        }
+        
+        self.popupState = newState
+        
+        makePopupStateConsistent(oldState: originalState, newState: newState)
+    }
+    
+    // interface with non-popup stuff; ensures switchPopupState doesn't have to concern itself with things that call it,
+    // e.g. gestures and their cancellation (even though it's called from switchPopupState, for convenience)
+    func makePopupStateConsistent(oldState: PopupState, newState: PopupState) {
+        do {
+            if oldState == .pushing && (newState == .open || newState == .opening) {
+                self.popFeedback.impactOccurred()
+            }
+            
+            // TODO: cancel gestures more aggressively?
+            
+            if newState == .pushing {
+                // usually happens when long hold is interrupted by pressure
+                self.popupLongHoldGesture.cancel()
+            }
+            
+            if newState == .opening {
+                // neither opening gesture needs to persist after activation
+                // BUGFIX: prevents long press from immediately reopening popup after selection
+                self.popupPressureGesture.cancel()
+                self.popupLongHoldGesture.cancel()
+            }
+            
+            self.delegate?.selectionPopupDidChangeState(popup: self, state: newState)
+        }
+        
+        // asserts
+        switch newState {
+        case .closed:
+            assert(!isShowing)
+            assert(self.popupOpenAnimation == nil)
+            assert(self.popupCloseAnimation == nil)
+            break
+        case .pushing:
+            assert(isShowing)
+            assert(self.popupOpenAnimation == nil)
+            assert(self.popupCloseAnimation == nil)
+            break
+        case .opening:
+            assert(isShowing)
+            assert(self.popupOpenAnimation != nil)
+            assert(self.popupCloseAnimation == nil)
+            break
+        case .open:
+            assert(isShowing)
+            assert(self.popupOpenAnimation == nil)
+            assert(self.popupCloseAnimation == nil)
+            assert(self.t == 1)
+            break
+        case .closing:
+            assert(isShowing)
+            assert(self.popupOpenAnimation == nil)
+            assert(self.popupCloseAnimation != nil)
+            break
+        }
+    }
+    
+    // AB: these are holdovers from when our popup used to be a subview of another view
+    // TODO: tie in with 't'?
+    // popup is not shown when state is closed, and open otherwise
+    func show() {
+        for view in self.subviews {
+            view.isHidden = false
+        }
+    }
+    func hide() {
+        for view in self.subviews {
+            view.isHidden = true
+        }
+    }
+    public var isShowing: Bool {
+        return self.subviews.reduce(true, { (current: Bool, view: UIView) -> Bool in
+            return current && !view.isHidden
+        })
     }
 }
 
