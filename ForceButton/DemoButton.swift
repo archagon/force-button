@@ -15,13 +15,11 @@ class DemoButton: ForceButton {
     
     var isEmphasized: Bool = false {
         didSet {
-            if oldValue != isEmphasized {
-                updateDisplayState(settingSubState: .emphasized, toOn: isEmphasized)
-            }
+            updateDisplayState(settingSubState: .emphasized, from: oldValue)
         }
     }
     func setIsEmphasized(_ val: Bool, animated: Bool=true) {
-        self.performAnimableChanges(animated: animated) { [unowned self] _ in
+        self.performAnimableChanges(animated: animated) { _ in
             self.isEmphasized = val
         }
     }
