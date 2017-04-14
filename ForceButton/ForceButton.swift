@@ -10,6 +10,7 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
 // TODO: pressure should check within radius
+// TODO: figure out how to make manual-t play nice with animations and with state
 
 // a parametric button with (optional) pressure control and state animations
 open class ForceButton: UIControl, UIGestureRecognizerDelegate {
@@ -448,15 +449,23 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         return true
     }
     
-    // AB: since both gesture recognizers are "sensors" that are immediately recognized (basically), this prevents
-    // lock up with e.g. scroll views
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return true
+        if (gestureRecognizer == self.regularTouchGestureRecognizer || otherGestureRecognizer == self.regularTouchGestureRecognizer) {
+            // can't return to regular ol' touch from deep touch
+            return !self.deepTouchMode
+        }
+        else {
+            // since both gesture recognizers are "sensors" that are immediately recognized (basically), this prevents lock up with e.g. scroll views
+            return true
+        }
     }
     
     // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
     private var _tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
     private var _deepTouchStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    private var deepTouchMode: Bool {
+        return _deepTouchStartingConditions != nil
+    }
     
     // handles non-deep-touch taps, highlights, etc. (i.e. standard UIButton behavior)
     @objc private func tapEvents(recognizer: SimpleMovementGestureRecognizer) {
@@ -490,7 +499,6 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 if pointInsideTapBounds(localPoint) {
                     // this also takes care of animations
                     self.isOn = !startingConditions.value
-                    
                     self.sendActions(for: .valueChanged)
                 }
                 
@@ -509,10 +517,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 
                 // this also takes care of animations
                 self.isOn = originalOn
-                
-                if currentOn != originalOn {
-                    self.sendActions(for: .valueChanged)
-                }
+                if currentOn != originalOn { self.sendActions(for: .valueChanged) }
                 
                 self._tapStartingConditions = nil
             }
@@ -522,6 +527,8 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     }
 
     // handles button deep touch mode
+    // TODO: animation/state interactions aren't really well-defined here... mostly relying on 't' to not depend on state
+    // and for animations not to restart once deep touch begins... would be nice to have 'undefined' state, I guess
     @objc private func deepTouchEvents(recognizer: SimpleDeepTouchGestureRecognizer) {
         switch recognizer.state {
         case .began:
@@ -552,10 +559,9 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                         
                         if self.t >= self.snapOffT {
                             self.setOn(false, animated: false)
+                            self.sendActions(for: .valueChanged)
                             
                             self.lightHapticGenerator.impactOccurred()
-                            
-                            self.sendActions(for: .valueChanged)
                         }
                         
                         self.t = self.snapOnT + tTail
@@ -575,7 +581,6 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                         
                         if self.t >= self.snapOnT {
                             self.isOn = true
-                            
                             self.sendActions(for: .valueChanged)
                             
                             self.hapticGenerator.impactOccurred()
