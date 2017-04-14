@@ -14,11 +14,14 @@ import UIKit.UIGestureRecognizerSubclass
 // a parametric button with (optional) pressure control and state animations
 open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     // AB: There are two types of state to track here. First, there's the value state — on or off. This is stored
-    // as a separate property and causes the button to change its display state. The second is the display
-    // state provided by UIControl. This is what actually corresponds to the visible button state. By default,
-    // display state changes are animated.
+    // as a separate property and causes the button to change its display state. The second is the state property
+    // provided by UIControl. This is what actually corresponds to the visible button state. By default,
+    // display state changes are animated. The state is computed from a number of 'isX' properties, and as such,
+    // the way a button looks at a given moment might not necessarily map to its under-the-hood state. (But an update 
+    // can be triggered to animate it back to consistency.)
     
     public static let StandardTapForce: Double = 0.2 //0.15 according to Apple docs, but works slightly better for this case
+    
     // MARK: Public Custom Properties
     
     public var tapticStyle: UIImpactFeedbackStyle? = .medium {
@@ -48,17 +51,18 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     
     // MARK: Public State Properties
     
-    public var on: Bool = false {
+    // NOTE: as with UISwitch, this only emits valueChanged event if triggered by user, not programmatically
+    public var isOn: Bool = false {
         didSet {
             updateDisplayStateBatch {
                 self.isDepressed = false
-                self.isSelected = on
+                self.isSelected = isOn
             }
         }
     }
     public func setOn(_ on: Bool, animated: Bool) {
         performAnimableChanges(animated: animated) { (animated: Bool) in
-            self.on = on
+            self.isOn = on
         }
     }
     
@@ -77,6 +81,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
     }
     
     // for subclassers: setting various properties automatically animates the button, so we need this override
+    // TODO: seems like this should persist, if nested...? mostly it works b/c important calls are implicitly animated (or not)
     public func performAnimableChanges(animated: Bool, _ function: (Bool)->()) {
         let previousDisabledAnimations = self._disableAutomaticAnimations
         self._disableAutomaticAnimations = !animated
@@ -244,7 +249,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             self.updateDisplayState(oldValue: oldState, newValue: self.state, oldT: self.t, animated: !self.disableAutomaticAnimations, forced: forced)
         }
     }
-    private var _updateDisplayStateBatchAccumulatedState: (counter: Int, startingState: UIControlState, startingT: Double, forced: Bool)?
+    private var _updateDisplayStateBatchAccumulatedState: (counter: Int, startingState: UIControlState, startingT: Double, forced: Bool)? //should not be touched outside the above two methods
     
     // for subclass use
     public func updateDisplayState(oldValue: UIControlState, newValue: UIControlState, oldT: Double, animated: Bool, forced: Bool = false) {
@@ -308,7 +313,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             self.setNeedsDisplay()
             
             if let block = self.tBlock {
-                block(self.t, self.snapOnT, self.bounds, self.state, self.on)
+                block(self.t, self.snapOnT, self.bounds, self.state, self.isOn)
             }
         }
     }
@@ -432,10 +437,6 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             p.y <= -cancellationThreshhold)
     }
     
-    // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
-    private var tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
-    private var deepTouchStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
-    
     override open func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer == self.regularTouchGestureRecognizer {
             // if we're in deep touch mode and another finger comes in, make sure it can't start another pan gesture
@@ -453,6 +454,10 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         return true
     }
     
+    // TODO: should deepTouchStartingConditions and tapStartingConditions really be different variables?
+    private var _tapStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    private var _deepTouchStartingConditions: (position: CGPoint, time: TimeInterval, value: Bool)?
+    
     // handles non-deep-touch taps, highlights, etc. (i.e. standard UIButton behavior)
     @objc private func tapEvents(recognizer: SimpleMovementGestureRecognizer) {
         switch recognizer.state {
@@ -463,11 +468,11 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             
             fallthrough
         case .changed:
-            if self.tapStartingConditions == nil {
-                self.tapStartingConditions = (position: recognizer.location(in: nil), time: CACurrentMediaTime(), value: self.on)
+            if self._tapStartingConditions == nil {
+                self._tapStartingConditions = (position: recognizer.location(in: nil), time: CACurrentMediaTime(), value: self.isOn)
             }
             
-            if let _  = self.tapStartingConditions {
+            if let _  = self._tapStartingConditions {
                 let p1 = recognizer.location(in: nil)
                 let localPoint = self.convert(p1, from: nil)
                 
@@ -478,18 +483,18 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         case .ended:
             //print("tap gesture recognizer ended")
             
-            if let startingConditions = self.tapStartingConditions {
+            if let startingConditions = self._tapStartingConditions {
                 let p1 = recognizer.location(in: nil)
                 let localPoint = self.convert(p1, from: nil)
                 
                 if pointInsideTapBounds(localPoint) {
                     // this also takes care of animations
-                    self.on = !startingConditions.value
+                    self.isOn = !startingConditions.value
                     
                     self.sendActions(for: .valueChanged)
                 }
                 
-                self.tapStartingConditions = nil
+                self._tapStartingConditions = nil
             }
 
             break
@@ -498,28 +503,25 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             
             fallthrough
         default:
-            // TOOD: cancellation animation
-            if let startingConditions = self.tapStartingConditions {
+            if let startingConditions = self._tapStartingConditions {
+                let currentOn = self.isOn
+                let originalOn = startingConditions.value
+                
                 // this also takes care of animations
-                if self.on != startingConditions.value {
-                    self.on = startingConditions.value
-                    
+                self.isOn = originalOn
+                
+                if currentOn != originalOn {
                     self.sendActions(for: .valueChanged)
                 }
                 
-                self.tapStartingConditions = nil
+                self._tapStartingConditions = nil
             }
-            
-            // TODO: move
-            // AB: this is unnecessary in 'ended' b/c if we're depressed, the value is necessarily different from start
-            self.isDepressed = false
             
             break
         }
     }
 
     // handles button deep touch mode
-    // TODO: check pointInsideTapBounds while not fully depressed
     @objc private func deepTouchEvents(recognizer: SimpleDeepTouchGestureRecognizer) {
         switch recognizer.state {
         case .began:
@@ -533,11 +535,11 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             
             fallthrough
         case .changed:
-            if self.deepTouchStartingConditions == nil {
-                self.deepTouchStartingConditions = (position: recognizer.location(in: nil), time: CACurrentMediaTime(), value: self.on)
+            if self._deepTouchStartingConditions == nil {
+                self._deepTouchStartingConditions = (position: recognizer.location(in: nil), time: CACurrentMediaTime(), value: self.isOn)
             }
                     
-            if let startingConditions = self.deepTouchStartingConditions {
+            if let startingConditions = self._deepTouchStartingConditions {
                 //let p1 = recognizer.location(in: nil)
                 //let localPoint = self.convert(p1, from: nil)
                 
@@ -545,7 +547,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                 let tTail = log10(1 + normalizedT)*0.7
                 
                 if startingConditions.value {
-                    if self.on {
+                    if self.isOn {
                         self.lightHapticGenerator.prepare()
                         
                         if self.t >= self.snapOffT {
@@ -563,7 +565,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                     }
                 }
                 else {
-                    if self.on {
+                    if self.isOn {
                         // ignore -- incidentally, this also prevents interference with the animation
                     }
                     else {
@@ -572,11 +574,11 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                         self.t = normalizedT
                         
                         if self.t >= self.snapOnT {
-                            self.on = true
-                            
-                            self.hapticGenerator.impactOccurred()
+                            self.isOn = true
                             
                             self.sendActions(for: .valueChanged)
+                            
+                            self.hapticGenerator.impactOccurred()
                         }
                     }
                 }
@@ -584,16 +586,16 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
         case .ended:
             //print("deep touch gesture recognizer ended")
             
-            if let startingConditions = self.deepTouchStartingConditions {
+            if let startingConditions = self._deepTouchStartingConditions {
                 // AB: force animation if we're on the wrong t, even if the state is correct; happens on 'off'
                 // KLUDGE: we don't do this on 'on' b/c 'on' starts ignoring the gesture after triggering
-                if !self.on && self.t != t(forState: self.state) {
+                if !self.isOn && self.t != t(forState: self.state) {
                     let value: Bool = startingConditions.value
                     let oldState: UIControlState = (value ? UIControlState.selected : UIControlState.normal)
                     updateDisplayState(oldValue: oldState, newValue: self.state, oldT: self.t, animated: true, forced: true)
                 }
                 
-                self.deepTouchStartingConditions = nil
+                self._deepTouchStartingConditions = nil
             }
             
             break
@@ -602,9 +604,9 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             
             fallthrough
         default:
-            if let startingConditions = self.deepTouchStartingConditions {
-                if self.on != startingConditions.value {
-                    self.on = startingConditions.value
+            if let startingConditions = self._deepTouchStartingConditions {
+                if self.isOn != startingConditions.value {
+                    self.isOn = startingConditions.value
                     
                     self.sendActions(for: .valueChanged)
                 }
@@ -625,7 +627,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
                     updateDisplayState(oldValue: oldState, newValue: self.state, oldT: oldT, animated: true)
                 }
                 
-                self.deepTouchStartingConditions = nil
+                self._deepTouchStartingConditions = nil
             }
         }
     }
@@ -634,7 +636,7 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
 
     override open func draw(_ rect: CGRect) {
         if let block = renderBlock {
-            block(self.t, self.snapOnT, rect, self.bounds, self.state, self.on)
+            block(self.t, self.snapOnT, rect, self.bounds, self.state, self.isOn)
         }
     }
     

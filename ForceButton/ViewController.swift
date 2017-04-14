@@ -195,7 +195,7 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         if let cell = cell as? DemoPopupCell {
             cell.delegate = self
-            cell.button.on = false
+            cell.button.isOn = false
            
             // AB: cancels the cell popup & button gestures whenever anything interesting happens in the scroll view
             self.collection.panGestureRecognizer.addTarget(cell, action: #selector(DemoPopupCell.scrollViewCancellationHook))
