@@ -323,13 +323,9 @@ public class SelectionPopup: UIView {
     }
     
     public func cancel() {
-        guard let gestures = self.gestureRecognizers else {
-            return
-        }
-        
-        for gesture in gestures {
-            gesture.cancel()
-        }
+        self.popupPressureGesture.cancel()
+        self.popupSelectionGesture.cancel()
+        self.popupLongHoldGesture.cancel()
     }
     
     // AB: no longer necessary w/gesture hookup
@@ -1506,12 +1502,10 @@ extension SelectionPopup {
             self.delegate?.selectionPopupDidClose(popup: self)
         case .pushing:
             show()
-            self.cancel()
             self.popupOpenAnimation = nil
             self.popupCloseAnimation = nil
         case .opening:
             show()
-            self.cancel()
             self.popupCloseAnimation = nil
             addPopupOpenAnimationIfNeeded()
         case .open:
@@ -1522,7 +1516,6 @@ extension SelectionPopup {
             self.delegate?.selectionPopupDidOpen(popup: self)
         case .closing:
             show()
-            self.cancel()
             self.popupOpenAnimation = nil
             addPopupCloseAnimationIfNeeded()
         }
