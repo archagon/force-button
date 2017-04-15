@@ -11,15 +11,11 @@ import AudioToolbox
 import ForceButtonFramework
 
 // NEXT:
-//  * clean up force button & popup
-//  * correct design of t/gestures/state in force button
-//  * move popup gestures/state to class
-//  * handle NEXT/imprtant TODOs
 //  * cleanup for non-force devices
 //  * check memory
+//  * revise description below
 
 /*
- 
  This demo project has a whole bunch of features (semi-) working in concert:
  
    * 3 types of buttons: 3d touch enabled with no popups (red), regular with 3d touch popups (blue), and regular with long press popups (green).
@@ -41,7 +37,6 @@ import ForceButtonFramework
    * SelectionPopup does not handle any of its own peek/pop gestures, and instead exposes a 't' property. DemoCell controls it using several gestures.
  
  Kinda confusing, and a bit boilerplate-y, but hopefully all the components are sufficiently decoupled to prevent headaches.
- 
  */
 
 class ViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, DemoCellDelegate {

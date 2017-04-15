@@ -1360,8 +1360,8 @@ extension SelectionPopup {
         }
     }
     
-    public func close() {
-        switchPopupState(.closing)
+    public func close(animated: Bool = true) {
+        switchPopupState((animated ? .closing : .closed))
     }
     
     // manages popup t state, animations, and also a few delegate calls; does not deal with gestures, hardware, etc.

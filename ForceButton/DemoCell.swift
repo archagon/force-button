@@ -127,7 +127,7 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate, Selectio
                     return popup
                 }
                 else {
-                    cancel()
+                    cancelAndClose()
                     return UIView() //KLUDGE: ensures that touches don't do anything
                 }
             }
@@ -137,10 +137,8 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate, Selectio
     }
     
     override func prepareForReuse() {
-        // NEXT:
-        //switchPopupState(.closed) //prevents animation
-        self.popup?.selectedItem = nil
         cancel()
+        self.popup?.close(animated: false)
     }
     
     // MARK: Button Delegate
@@ -212,10 +210,12 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate, Selectio
     // MARK: Public Interface Methods
     
     func cancel() {
-        // AB: these might be handled by makePopupStateConsistent, but better safe than sorry
         self.button.cancel()
         self.popup?.cancel()
-        
+    }
+    
+    func cancelAndClose() {
+        cancel()
         self.popup?.close()
     }
     
@@ -232,7 +232,7 @@ class DemoPopupCell: UICollectionViewCell, UIGestureRecognizerDelegate, Selectio
             let translation = gesture.translation(in: nil)
 
             if translation != CGPoint.zero {
-                self.cancel()
+                cancelAndClose()
             }
         }
     }

@@ -10,7 +10,7 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
 // TODO: pressure should check within radius
-// TODO: figure out how to make manual-t play nice with animations and with state
+// TODO: figure out how to make manual-t play nice with animations and with state -- esp. pressure gesture end/cancel
 
 // a parametric button with (optional) pressure control and state animations
 open class ForceButton: UIControl, UIGestureRecognizerDelegate {
@@ -594,19 +594,13 @@ open class ForceButton: UIControl, UIGestureRecognizerDelegate {
             //print("deep touch gesture recognizer ended")
             
             if let startingConditions = self._deepTouchStartingConditions {
-                
                 // AB: force animation if we're on the wrong t, even if the state is correct; happens on 'off'
-                // KLUDGE: we don't do this on 'on' b/c 'on' starts ignoring the gesture after triggering
-//                if !self.isOn && self.t != t(forState: self.state) {
-//                    let value: Bool = startingConditions.value
-//                    let oldState: UIControlState = (value ? UIControlState.selected : UIControlState.normal)
-//                    updateDisplayState(oldValue: oldState, newValue: self.state, oldT: self.t, animated: true, forced: true)
-//                }
-                
                 // pressure gesture doesn't change 'on' state when ended, so we can't rely on implicit animations
-                // KLUDGE: we don't do this on 'on' b/c we want the animation to keep playing
-                if !self.isOn {
-                    updateDisplayState(oldValue: self.state, newValue: self.state, oldT: self.t, animated: true, forced: true)
+                // KLUDGE: we don't do this on 'on' b/c 'on' starts ignoring the gesture after triggering
+                if !self.isOn && self.t != t(forState: self.state) {
+                    let value: Bool = startingConditions.value
+                    let oldState: UIControlState = (value ? UIControlState.selected : UIControlState.normal)
+                    updateDisplayState(oldValue: oldState, newValue: self.state, oldT: self.t, animated: true, forced: true)
                 }
                 
                 self._deepTouchStartingConditions = nil
